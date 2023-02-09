@@ -429,8 +429,8 @@ class PET(torch.nn.Module):
                                                                                     mask, nums, bond_head, central_species)
        
         
-        return torch_geometric.nn.global_add_pool(atomic_energies,
-                                                  batch=batch_dict['batch'])
+        return torch_geometric.nn.global_add_pool(atomic_energies[:, None],
+                                                  batch=batch_dict['batch'])[:, 0]
     
     def get_targets(self, batch):
         #print(self.augmentation)
