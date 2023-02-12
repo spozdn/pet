@@ -200,7 +200,7 @@ class CartesianTransformer(torch.nn.Module):
             central_specie_embedding = self.central_embedder(central_species)
             if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
                 central_scalar_embedding = self.central_scalar_embedding(central_scalar_attributes)
-                central_token = torch.cat([central_specie_embedding, central_scalar_embedding], dim = 2)
+                central_token = torch.cat([central_specie_embedding, central_scalar_embedding], dim = 1)
                 central_token = self.central_compress(central_token)
             else:
                 central_token = central_specie_embedding

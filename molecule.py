@@ -38,9 +38,8 @@ class Molecule():
             if len(scalar_attributes.shape) == 1:
                 scalar_attributes = scalar_attributes[:, np.newaxis]
         
-            self.central_scalar_attributes = []
-            for i in range(len(positions)):
-                self.central_scalar_attributes.append(scalar_attributes[i])
+            self.central_scalar_attributes = scalar_attributes
+            
 
         
         i_list, j_list, D_list, S_list = ase.neighborlist.neighbor_list('ijDS', atoms, r_cut)

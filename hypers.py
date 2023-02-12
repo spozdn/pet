@@ -32,9 +32,10 @@ def combine_hypers(provided_hypers, default_hypers):
                          'SCHEDULER_STEP_SIZE', 'SCHEDULER_STEP_SIZE_ATOMIC',
                          'EPOCHS_WARMUP', 'EPOCHS_WARMUP_ATOMIC']
     
+    
     for key in provided_hypers.keys():
         if key not in default_hypers.keys():
-            if key not in dublicated_params:
+            if key not in dublicated_params:                
                 raise ValueError(f"unknown hyper parameter {key}")
     
     result = {}
@@ -72,6 +73,11 @@ def combine_hypers(provided_hypers, default_hypers):
     if (not result['USE_ENERGIES']) or (not result['USE_FORCES']):
         if (result['ENERGY_WEIGHT'] is not None):
             warnings.warn("ENERGY_WEIGHT was provided, but in the current calculation, it doesn't affect anything since only one target of energies and forces is used")
+            
+    if result['USE_ADDITIONAL_SCALAR_ATTRIBUTES']:
+        if result['SCALAR_ATTRIBUTES_SIZE'] is None:
+            raise ValueError("scalar attributes size must be provided if use_additional_scalar_attributes == True")
+            
     return result
 
 class Hypers():

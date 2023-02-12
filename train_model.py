@@ -22,6 +22,7 @@ import copy
 import inspect
 import yaml
 import random
+from torch_geometric.nn import DataParallel
 
 from molecule import Molecule, batch_to_dict
 from hypers import Hypers
@@ -54,6 +55,7 @@ torch.cuda.manual_seed_all(Hypers.RANDOM_SEED)
 if Hypers.CUDA_DETERMINISTIC:
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.benchmark = False
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     
 train_structures = ase.io.read(TRAIN_STRUCTURES_PATH, index = ':')
 
@@ -216,8 +218,12 @@ if Hypers.USE_FORCES:
     all_val_forces = []
     model.train(False)
     for batch in val_loader:
-        batch.cuda()
-        model.augmentation = False
+        if not Hypers.MULTI_GPU:
+            batch.cuda()
+            model.augmentation = False
+        else:
+            model.module.augmentation = False
+            
         _, _, _, targets_forces = model(batch)
         all_val_forces.append(targets_forces.data.cpu().numpy())
     all_val_forces = np.concatenate(all_val_forces, axis = 0)
@@ -247,8 +253,12 @@ for epoch in pbar:
 
     model.train(True)
     for batch in train_loader:
-        batch.cuda()
-        model.augmentation = True
+        if not Hypers.MULTI_GPU:
+            batch.cuda()
+            model.augmentation = True
+        else:
+            model.module.augmentation = True
+        
         predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
         if Hypers.USE_ENERGIES:
             energies_logger.train_logger.update(predictions_energies, targets_energies)
@@ -272,8 +282,12 @@ for epoch in pbar:
 
     model.train(False)
     for batch in val_loader:
-        batch.cuda()
-        model.augmentation = False
+        if not Hypers.MULTI_GPU:
+            batch.cuda()
+            model.augmentation = False
+        else:
+            model.module.augmentation = False
+            
         predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
         if Hypers.USE_ENERGIES:
             energies_logger.val_logger.update(predictions_energies, targets_energies)
@@ -359,12 +373,12 @@ if Hypers.USE_FORCES:
     summary += f'best val rmse in forces: {forces_rmse_model_keeper.best_error} at epoch {forces_rmse_model_keeper.best_epoch}\n'
     
 if Hypers.USE_ENERGIES and Hypers.USE_FORCES:
-    save_model('best_val_mae_multiplication_model', multiplication_mae_model_keeper)
-    summary += f'for best multiplication mae in energies: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
+    save_model('best_val_mae_both_model', multiplication_mae_model_keeper)
+    summary += f'best both (multiplication) mae in energies: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
     
     
-    save_model('best_val_rmse_multiplication_model', multiplication_rmse_model_keeper)
-    summary += f'for best multiplication rmse in energies: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n'
+    save_model('best_val_rmse_both_model', multiplication_rmse_model_keeper)
+    summary += f'best both (multiplication) rmse in energies: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n'
     
 with open(f"results/{NAME_OF_CALCULATION}/summary.txt", 'w') as f:
     print(summary, file = f)

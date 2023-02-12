@@ -100,7 +100,8 @@ for _ in range(N_AUG):
         forces_predicted = []
     
     for batch in loader:
-        batch.cuda()
+        if not Hypers.MULTI_GPU:
+            batch.cuda()
         model.augmentation = True
         predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
         if Hypers.USE_ENERGIES:
