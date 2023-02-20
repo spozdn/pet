@@ -21,6 +21,7 @@ import sys
 import copy
 import inspect
 import yaml
+from torch_geometric.nn import DataParallel
 
 from molecule import Molecule, batch_to_dict
 from hypers import Hypers
@@ -35,7 +36,7 @@ HYPERS_PATH = sys.argv[2]
 PATH_TO_MODEL_STATE_DICT = sys.argv[3]
 ALL_SPECIES_PATH = sys.argv[4]
 SELF_CONTRIBUTIONS_PATH = sys.argv[5]
-N_AUG = sys.argv[6]
+N_AUG = int(sys.argv[6])
 
 '''STRUCTURES_PATH = 'small_data/test_small.xyz'
 HYPERS_PATH = 'results/test_calc_continuation_0/hypers_used.yaml'
@@ -48,7 +49,8 @@ Hypers.load_from_file(HYPERS_PATH)
 structures = ase.io.read(STRUCTURES_PATH, index = ':')
 
 all_species = np.load(ALL_SPECIES_PATH)
-self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
+if Hypers.USE_ENERGIES:
+    self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
 
 molecules = [Molecule(structure, Hypers.R_CUT) for structure in tqdm(structures)]
 max_nums = [molecule.get_max_num() for molecule in molecules]
@@ -102,7 +104,10 @@ for _ in range(N_AUG):
     for batch in loader:
         if not Hypers.MULTI_GPU:
             batch.cuda()
-        model.augmentation = True
+            model.augmentation = True
+        else:
+            model.module.augmentation = True
+            
         predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
         if Hypers.USE_ENERGIES:
             energies_predicted.append(predictions_energies.data.cpu().numpy())
