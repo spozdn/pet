@@ -95,7 +95,7 @@ if Hypers.USE_ENERGIES:
 if Hypers.USE_FORCES:
     all_forces_predicted = []
     
-for _ in range(N_AUG):
+for _ in tqdm(range(N_AUG)):
     if Hypers.USE_ENERGIES:
         energies_predicted = []
     if Hypers.USE_FORCES:
