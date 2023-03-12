@@ -109,9 +109,14 @@ class CartesianTransformer(torch.nn.Module):
         self.trans = Transformer(self.trans_layer, 
                                                    num_layers=n_layers)
         
-        input_dim = 3
-        if Hypers.USE_LENGTH:
-            input_dim += 1
+        if Hypers.USE_ONLY_LENGTH:
+            input_dim = 1
+        else:
+            input_dim = 3
+            if Hypers.USE_LENGTH:
+                input_dim += 1
+                
+                
         if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             input_dim += Hypers.SCALAR_ATTRIBUTES_SIZE
         
@@ -180,9 +185,13 @@ class CartesianTransformer(torch.nn.Module):
         initial_n_tokens = x.shape[1]
         max_number = int(torch.max(nums))
         
-        coordinates = [x]
-        if Hypers.USE_LENGTH:
-            coordinates.append(neighbor_lengths)
+        if Hypers.USE_ONLY_LENGTH:
+            coordinates = [neighbor_lengths]
+        else:
+            coordinates = [x]
+            if Hypers.USE_LENGTH:
+                coordinates.append(neighbor_lengths)
+                
         if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             coordinates.append(neighbor_scalar_attributes)
         coordinates = torch.cat(coordinates, dim = 2)
