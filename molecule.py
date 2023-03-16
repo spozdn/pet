@@ -136,8 +136,6 @@ class Molecule():
                   'nums' : nums,
                   'mask' : mask}
         
-        if Hypers.USE_FORCES:
-            kwargs['forces'] = torch.FloatTensor(self.atoms.arrays['forces'])
         
         if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             kwargs['neighbor_scalar_attributes'] = torch.FloatTensor(neighbor_scalar_attributes)

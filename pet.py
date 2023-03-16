@@ -284,12 +284,12 @@ class Head(torch.nn.Module):
         super(Head, self).__init__()      
         self.nn = nn.Sequential(nn.Linear(n_in, n_neurons), get_activation(),
                                     nn.Linear(n_neurons, n_neurons), get_activation(),
-                                    nn.Linear(n_neurons, 1))
+                                    nn.Linear(n_neurons, 3))
        
     def forward(self, batch_dict):
         pooled = batch_dict['pooled']
-        outputs = self.nn(pooled)[..., 0]
-        return {"atomic_energies" : outputs}
+        outputs = self.nn(pooled)
+        return {"atomic_dipoles" : outputs}
     
     
 class PET(torch.nn.Module):
@@ -347,7 +347,7 @@ class PET(torch.nn.Module):
         self.heads = torch.nn.ModuleList(heads)
         
         
-        if Hypers.USE_BOND_ENERGIES:
+        if Hypers.USE_BOND_DIPOLES:
             bond_heads = []
             if heads_central_specific:
                 for _ in range(n_gnn_layers):
@@ -373,14 +373,14 @@ class PET(torch.nn.Module):
             pooled = messages_proceed.sum(dim = 1)
         
         predictions = head({'pooled' : pooled, 
-                                     'central_species' : central_species})['atomic_energies']
+                                     'central_species' : central_species})['atomic_dipoles']
         return predictions
     
     def get_predictions_messages_bonds(self, messages, mask, nums, head, central_species):
         predictions = head({'pooled' : messages, 
-                                     'central_species' : central_species})['atomic_energies']
+                                     'central_species' : central_species})['atomic_dipoles']
         predictions[mask] = 0.0
-        if Hypers.AVERAGE_BOND_ENERGIES:
+        if Hypers.AVERAGE_BOND_DIPOLES:
             result = predictions.sum(dim = 1) / nums
         else:
             result = predictions.sum(dim = 1)
@@ -388,7 +388,7 @@ class PET(torch.nn.Module):
     
     def get_predictions_central_tokens(self, central_tokens, head, central_species):
         predictions = head({'pooled' : central_tokens, 
-                                     'central_species' : central_species})['atomic_energies']
+                                     'central_species' : central_species})['atomic_dipoles']
         return predictions
         
     def forward(self, batch):
@@ -411,13 +411,13 @@ class PET(torch.nn.Module):
         neighbors_pos = batch_dict['neighbors_pos']
         
         batch_dict['input_messages'] = self.embedding(neighbor_species)
-        atomic_energies = 0.0
+        atomic_dipoles = 0.0
         
         for layer_index in range(len(self.gnn_layers)):
             head = self.heads[layer_index]
             gnn_layer = self.gnn_layers[layer_index]
             
-            if Hypers.USE_BOND_ENERGIES:
+            if Hypers.USE_BOND_DIPOLES:
                 bond_head = self.bond_heads[layer_index]
                 
             result = gnn_layer(batch_dict)
@@ -428,25 +428,30 @@ class PET(torch.nn.Module):
             batch_dict['input_messages'] = 0.5 * (batch_dict['input_messages'] + new_input_messages)
             
             if "central_token" in result.keys():
-                atomic_energies = atomic_energies + self.get_predictions_central_tokens(result["central_token"],
+                atomic_dipoles = atomic_dipoles + self.get_predictions_central_tokens(result["central_token"],
                                                                                        head, central_species)
             else:
-                 atomic_energies = atomic_energies + self.get_predictions_messages(output_messages, mask, nums, head, central_species, multipliers)
+                 atomic_dipoles = atomic_dipoles + self.get_predictions_messages(output_messages, mask, nums, head, central_species, multipliers)
                     
-            if Hypers.USE_BOND_ENERGIES:
-                atomic_energies = atomic_energies + self.get_predictions_messages_bonds(output_messages,
+            if Hypers.USE_BOND_DIPOLES:
+                atomic_dipoles = atomic_dipoles + self.get_predictions_messages_bonds(output_messages,
                                                                                     mask, nums, bond_head, central_species)
        
         
-        return torch_geometric.nn.global_add_pool(atomic_energies[:, None],
-                                                  batch=batch_dict['batch'])[:, 0]
+        return torch_geometric.nn.global_add_pool(atomic_dipoles,
+                                                  batch=batch_dict['batch'])
     
     def get_targets(self, batch):
         #print(self.augmentation)
         if self.augmentation:
+            
             #print("here")
             indices = batch.batch.cpu().data.numpy()
-            rotations = torch.FloatTensor(get_rotations(indices, global_aug = Hypers.GLOBAL_AUG)).to(batch.x.device)
+            rotations, structural_rotations = get_rotations(indices, global_aug = True)
+            
+            rotations = torch.FloatTensor(rotations).to(batch.x.device)
+            structural_rotations = torch.FloatTensor(structural_rotations).to(batch.x.device)
+            
             batch.x_initial = batch.x.clone().detach()
             batch.x_initial.requires_grad = True
             batch.x = torch.bmm(batch.x_initial, rotations)
@@ -455,34 +460,28 @@ class PET(torch.nn.Module):
             batch.x_initial.requires_grad = True
             batch.x = batch.x_initial
         
-        self.task = 'energies'
+        self.task = 'dipoles'
         predictions = self(batch)
         self.task = 'both'
-        if Hypers.USE_FORCES:
-            grads  = torch.autograd.grad(predictions, batch.x_initial, grad_outputs = torch.ones_like(predictions),
-                                    create_graph = True)[0]
-            neighbors_index = batch.neighbors_index.transpose(0, 1)
-            neighbors_pos = batch.neighbors_pos
-            grads_messaged = grads[neighbors_index, neighbors_pos]
-            grads[batch.mask] = 0.0
-            first = grads.sum(dim = 1)
-            grads_messaged[batch.mask] = 0.0
-            second = grads_messaged.sum(dim = 1)
         
-        result = []
-        if Hypers.USE_ENERGIES:
-            result.append(predictions)
-            result.append(batch.y)
-        else:
-            result.append(None)
-            result.append(None)
+        if self.augmentation:
+            inverse_structural_rotations = structural_rotations.transpose(1, 2)
+            predictions = predictions[:, None, :]
+            predictions = torch.bmm(predictions, inverse_structural_rotations)
+            predictions = predictions[:, 0, :]
             
-        if Hypers.USE_FORCES:
-            result.append(first - second)
-            result.append(batch.forces)
-        else:
-            result.append(None)
-            result.append(None)
+        #print("predictions: ", predictions.shape)
+        #print("x: ", batch.x_initial.shape)
+        #print("rotations: ", rotations.shape)
+        #print("structural rotations: ", structural_rotations.shape)
+        result = []
+       
+        result.append(predictions)
+        result.append(batch.y)
+       
+        
+        result.append(None)
+        result.append(None)
             
         return result
     

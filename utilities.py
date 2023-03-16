@@ -99,7 +99,7 @@ def get_rotations(indices, global_aug = False):
     rotations[np.random.randn(rotations.shape[0]) >= 0] *= -1
     
     if global_aug:
-        return rotations[indices]
+        return rotations[indices], rotations
     else:
         return rotations
 

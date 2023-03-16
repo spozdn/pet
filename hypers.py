@@ -66,13 +66,8 @@ def combine_hypers(provided_hypers, default_hypers):
                                                          'EPOCHS_WARMUP_ATOMIC')               
     result[dubl_key] = dubl_value   
         
+   
         
-    if (not result['USE_ENERGIES']) and (not result['USE_FORCES']):
-        raise ValueError("At least one of the energies and forces should be used for fitting")
-        
-    if (not result['USE_ENERGIES']) or (not result['USE_FORCES']):
-        if (result['ENERGY_WEIGHT'] is not None):
-            warnings.warn("ENERGY_WEIGHT was provided, but in the current calculation, it doesn't affect anything since only one target of energies and forces is used")
             
     if result['USE_ADDITIONAL_SCALAR_ATTRIBUTES']:
         if result['SCALAR_ATTRIBUTES_SIZE'] is None:
@@ -148,6 +143,7 @@ class Hypers():
             Hypers.fix_Nones_in_yaml(default_hypers)
         
         combined_hypers = combine_hypers(provided_hypers, default_hypers)
+        #print("combined_hypers: ", combined_hypers)
         Hypers.set_from_dict(combined_hypers)
         
        
