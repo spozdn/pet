@@ -40,19 +40,20 @@ PROVIDED_HYPERS_PATH = sys.argv[3]
 DEFAULT_HYPERS_PATH = sys.argv[4]
 NAME_OF_CALCULATION = sys.argv[5]
 
-Hypers.set_from_files(PROVIDED_HYPERS_PATH, DEFAULT_HYPERS_PATH)
+hypers = Hypers()
+hypers.set_from_files(PROVIDED_HYPERS_PATH, DEFAULT_HYPERS_PATH)
 
 #TRAIN_STRUCTURES = '../experiments/hme21_iteration_3/hme21_train.xyz'
 #VAL_STRUCTURES = '../experiments/hme21_iteration_3/hme21_val.xyz'
 
-torch.manual_seed(Hypers.RANDOM_SEED)
-np.random.seed(Hypers.RANDOM_SEED)
-random.seed(Hypers.RANDOM_SEED)
-os.environ['PYTHONHASHSEED'] = str(Hypers.RANDOM_SEED)
-torch.cuda.manual_seed(Hypers.RANDOM_SEED)
-torch.cuda.manual_seed_all(Hypers.RANDOM_SEED)
+torch.manual_seed(hypers.RANDOM_SEED)
+np.random.seed(hypers.RANDOM_SEED)
+random.seed(hypers.RANDOM_SEED)
+os.environ['PYTHONHASHSEED'] = str(hypers.RANDOM_SEED)
+torch.cuda.manual_seed(hypers.RANDOM_SEED)
+torch.cuda.manual_seed_all(hypers.RANDOM_SEED)
 
-if Hypers.CUDA_DETERMINISTIC:
+if hypers.CUDA_DETERMINISTIC:
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.benchmark = False
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -60,17 +61,17 @@ if Hypers.CUDA_DETERMINISTIC:
 train_structures = ase.io.read(TRAIN_STRUCTURES_PATH, index = ':')
 
     
-if 'STRUCTURAL_BATCH_SIZE' not in Hypers.__dict__.keys():
-    Hypers.STRUCTURAL_BATCH_SIZE = get_structural_batch_size(train_structures, Hypers.ATOMIC_BATCH_SIZE)
+if 'STRUCTURAL_BATCH_SIZE' not in hypers.__dict__.keys():
+    hypers.STRUCTURAL_BATCH_SIZE = get_structural_batch_size(train_structures, hypers.ATOMIC_BATCH_SIZE)
     
-if 'EPOCH_NUM' not in Hypers.__dict__.keys():
-    Hypers.EPOCH_NUM = convert_atomic_throughput(train_structures, Hypers.EPOCH_NUM_ATOMIC)
+if 'EPOCH_NUM' not in hypers.__dict__.keys():
+    hypers.EPOCH_NUM = convert_atomic_throughput(train_structures, hypers.EPOCH_NUM_ATOMIC)
     
-if 'SCHEDULER_STEP_SIZE' not in Hypers.__dict__.keys():
-    Hypers.SCHEDULER_STEP_SIZE = convert_atomic_throughput(train_structures, Hypers.SCHEDULER_STEP_SIZE_ATOMIC)
+if 'SCHEDULER_STEP_SIZE' not in hypers.__dict__.keys():
+    hypers.SCHEDULER_STEP_SIZE = convert_atomic_throughput(train_structures, hypers.SCHEDULER_STEP_SIZE_ATOMIC)
     
-if 'EPOCHS_WARMUP' not in Hypers.__dict__.keys():
-    Hypers.EPOCHS_WARMUP = convert_atomic_throughput(train_structures, Hypers.EPOCHS_WARMUP_ATOMIC)
+if 'EPOCHS_WARMUP' not in hypers.__dict__.keys():
+    hypers.EPOCHS_WARMUP = convert_atomic_throughput(train_structures, hypers.EPOCHS_WARMUP_ATOMIC)
     
     
 val_structures = ase.io.read(VAL_STRUCTURES_PATH, index = ':')
@@ -96,7 +97,7 @@ os.mkdir(f'results/{NAME_OF_CALCULATION}')
 
 np.save(f'results/{NAME_OF_CALCULATION}/all_species.npy', all_species)
 
-all_members = inspect.getmembers(Hypers, lambda member:not(inspect.isroutine(member)))
+all_members = inspect.getmembers(hypers, lambda member:not(inspect.isroutine(member)))
 all_hypers = []
 for member in all_members:
     if member[0].startswith('__'):
@@ -112,7 +113,7 @@ with open(f"results/{NAME_OF_CALCULATION}/hypers_used.yaml", "w") as f:
 print(len(train_structures))
 print(len(val_structures))
 
-if Hypers.USE_ENERGIES:
+if hypers.USE_ENERGIES:
     train_energies = np.array([structure.info['energy'] for structure in train_structures])
     val_energies = np.array([structure.info['energy'] for structure in val_structures])
 
@@ -128,8 +129,8 @@ if Hypers.USE_ENERGIES:
     print(np.mean(np.abs(val_energies)))
     np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', rgr.coef_)
 
-train_molecules = [Molecule(structure, Hypers.R_CUT) for structure in tqdm(train_structures)]
-val_molecules = [Molecule(structure, Hypers.R_CUT) for structure in tqdm(val_structures)]
+train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES) for structure in tqdm(train_structures)]
+val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES) for structure in tqdm(val_structures)]
 
 
 molecules = train_molecules + val_molecules
@@ -144,7 +145,7 @@ train_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(tr
 val_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(val_molecules)]
 
 
-if Hypers.USE_ENERGIES:
+if hypers.USE_ENERGIES:
     for index in range(len(train_structures)):
         train_graphs[index].y = train_energies[index]
 
@@ -158,41 +159,41 @@ def seed_worker(worker_id):
     numpy.random.seed(worker_seed)
     random.seed(worker_seed)
 g = torch.Generator()
-g.manual_seed(Hypers.RANDOM_SEED)
+g.manual_seed(hypers.RANDOM_SEED)
 
-if Hypers.MULTI_GPU:
-    train_loader = DataListLoader(train_graphs, batch_size=Hypers.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-    val_loader = DataListLoader(val_graphs, batch_size = Hypers.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+if hypers.MULTI_GPU:
+    train_loader = DataListLoader(train_graphs, batch_size=hypers.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
+    val_loader = DataListLoader(val_graphs, batch_size = hypers.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
 else:
-    train_loader = DataLoader(train_graphs, batch_size=Hypers.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-    val_loader = DataLoader(val_graphs, batch_size = Hypers.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+    train_loader = DataLoader(train_graphs, batch_size=hypers.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
+    val_loader = DataLoader(val_graphs, batch_size = hypers.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
 
 
 add_tokens = []
-for _ in range(Hypers.N_GNN_LAYERS - 1):
-    add_tokens.append(Hypers.ADD_TOKEN_FIRST)
-add_tokens.append(Hypers.ADD_TOKEN_SECOND)
+for _ in range(hypers.N_GNN_LAYERS - 1):
+    add_tokens.append(hypers.ADD_TOKEN_FIRST)
+add_tokens.append(hypers.ADD_TOKEN_SECOND)
 
-model = PET(Hypers.TRANSFORMER_D_MODEL, Hypers.TRANSFORMER_N_HEAD,
-                       Hypers.TRANSFORMER_DIM_FEEDFORWARD, Hypers.N_TRANS_LAYERS, 
+model = PET(hypers, hypers.TRANSFORMER_D_MODEL, hypers.TRANSFORMER_N_HEAD,
+                       hypers.TRANSFORMER_DIM_FEEDFORWARD, hypers.N_TRANS_LAYERS, 
                        0.0, len(all_species), 
-                       Hypers.N_GNN_LAYERS, Hypers.HEAD_N_NEURONS, Hypers.TRANSFORMERS_CENTRAL_SPECIFIC, Hypers.HEADS_CENTRAL_SPECIFIC, 
+                       hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
                        add_tokens).cuda()
 
-if Hypers.MULTI_GPU:
+if hypers.MULTI_GPU:
     model = DataParallel(model)
     device = torch.device('cuda:0')
     model = model.to(device)
 
 
 import copy
-optim = torch.optim.Adam(model.parameters(), lr = Hypers.INITIAL_LR)
+optim = torch.optim.Adam(model.parameters(), lr = hypers.INITIAL_LR)
 
 def func_lr_scheduler(epoch):
-    if epoch < Hypers.EPOCHS_WARMUP:
-        return epoch / Hypers.EPOCHS_WARMUP
-    delta = epoch - Hypers.EPOCHS_WARMUP
-    num_blocks = delta // Hypers.SCHEDULER_STEP_SIZE 
+    if epoch < hypers.EPOCHS_WARMUP:
+        return epoch / hypers.EPOCHS_WARMUP
+    delta = epoch - hypers.EPOCHS_WARMUP
+    num_blocks = delta // hypers.SCHEDULER_STEP_SIZE 
     return 0.5 ** (num_blocks)
 
 scheduler = LambdaLR(optim, func_lr_scheduler)
@@ -206,19 +207,19 @@ if name_to_load is not None:
     
     
 history = []
-if Hypers.USE_ENERGIES:
+if hypers.USE_ENERGIES:
     energies_logger = FullLogger()
     
-if Hypers.USE_FORCES:
+if hypers.USE_FORCES:
     forces_logger = FullLogger()
 
 
 
-if Hypers.USE_FORCES:
+if hypers.USE_FORCES:
     all_val_forces = []
     model.train(False)
     for batch in val_loader:
-        if not Hypers.MULTI_GPU:
+        if not hypers.MULTI_GPU:
             batch.cuda()
             model.augmentation = False
         else:
@@ -233,19 +234,19 @@ if Hypers.USE_FORCES:
     forces_rmse_model_keeper = ModelKeeper()
     forces_mae_model_keeper = ModelKeeper()
 
-if Hypers.USE_ENERGIES:
+if hypers.USE_ENERGIES:
     sliding_energies_rmse = get_rmse(val_energies, np.mean(val_energies))
     
     energies_rmse_model_keeper = ModelKeeper()
     energies_mae_model_keeper = ModelKeeper()
 
-if Hypers.USE_ENERGIES and Hypers.USE_FORCES:
+if hypers.USE_ENERGIES and hypers.USE_FORCES:
     multiplication_rmse_model_keeper = ModelKeeper()
     multiplication_mae_model_keeper = ModelKeeper()
     
 best_val_mae = None
 best_val_model = None
-pbar = tqdm(range(Hypers.EPOCH_NUM))
+pbar = tqdm(range(hypers.EPOCH_NUM))
 
 
     
@@ -253,27 +254,27 @@ for epoch in pbar:
 
     model.train(True)
     for batch in train_loader:
-        if not Hypers.MULTI_GPU:
+        if not hypers.MULTI_GPU:
             batch.cuda()
             model.augmentation = True
         else:
             model.module.augmentation = True
         
         predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
-        if Hypers.USE_ENERGIES:
+        if hypers.USE_ENERGIES:
             energies_logger.train_logger.update(predictions_energies, targets_energies)
             loss_energies = get_loss(predictions_energies, targets_energies)
-        if Hypers.USE_FORCES:
+        if hypers.USE_FORCES:
             forces_logger.train_logger.update(predictions_forces, targets_forces)
             loss_forces = get_loss(predictions_forces, targets_forces)
 
-        if Hypers.USE_ENERGIES and Hypers.USE_FORCES: 
-            loss = Hypers.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
+        if hypers.USE_ENERGIES and hypers.USE_FORCES: 
+            loss = hypers.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
             loss.backward()
 
-        if Hypers.USE_ENERGIES and (not Hypers.USE_FORCES):
+        if hypers.USE_ENERGIES and (not hypers.USE_FORCES):
             loss_energies.backward()
-        if Hypers.USE_FORCES and (not Hypers.USE_ENERGIES):
+        if hypers.USE_FORCES and (not hypers.USE_ENERGIES):
             loss_forces.backward()
 
 
@@ -282,39 +283,39 @@ for epoch in pbar:
 
     model.train(False)
     for batch in val_loader:
-        if not Hypers.MULTI_GPU:
+        if not hypers.MULTI_GPU:
             batch.cuda()
             model.augmentation = False
         else:
             model.module.augmentation = False
             
         predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
-        if Hypers.USE_ENERGIES:
+        if hypers.USE_ENERGIES:
             energies_logger.val_logger.update(predictions_energies, targets_energies)
-        if Hypers.USE_FORCES:
+        if hypers.USE_FORCES:
             forces_logger.val_logger.update(predictions_forces, targets_forces)
 
     now = {}
-    if Hypers.USE_ENERGIES:
+    if hypers.USE_ENERGIES:
         now['energies'] = energies_logger.flush()
-    if Hypers.USE_FORCES:
+    if hypers.USE_FORCES:
         now['forces'] = forces_logger.flush()   
     now['lr'] = scheduler.get_last_lr()
     now['epoch'] = epoch
 
-    if Hypers.USE_ENERGIES:
-        sliding_energies_rmse = Hypers.SLIDING_FACTOR * sliding_energies_rmse + (1.0 - Hypers.SLIDING_FACTOR) * now['energies']['val']['rmse']
+    if hypers.USE_ENERGIES:
+        sliding_energies_rmse = hypers.SLIDING_FACTOR * sliding_energies_rmse + (1.0 - hypers.SLIDING_FACTOR) * now['energies']['val']['rmse']
 
         energies_mae_model_keeper.update(model, now['energies']['val']['mae'], epoch)
         energies_rmse_model_keeper.update(model, now['energies']['val']['rmse'], epoch)
 
 
-    if Hypers.USE_FORCES:
-        sliding_forces_rmse = Hypers.SLIDING_FACTOR * sliding_forces_rmse + (1.0 - Hypers.SLIDING_FACTOR) * now['forces']['val']['rmse']
+    if hypers.USE_FORCES:
+        sliding_forces_rmse = hypers.SLIDING_FACTOR * sliding_forces_rmse + (1.0 - hypers.SLIDING_FACTOR) * now['forces']['val']['rmse']
         forces_mae_model_keeper.update(model, now['forces']['val']['mae'], epoch)
         forces_rmse_model_keeper.update(model, now['forces']['val']['rmse'], epoch)    
 
-    if Hypers.USE_ENERGIES and Hypers.USE_FORCES:
+    if hypers.USE_ENERGIES and hypers.USE_FORCES:
         multiplication_mae_model_keeper.update(model, now['forces']['val']['mae'] * now['energies']['val']['mae'], epoch,
                                                additional_info = [now['energies']['val']['mae'], now['forces']['val']['mae']])
         multiplication_rmse_model_keeper.update(model, now['forces']['val']['rmse'] * now['energies']['val']['rmse'], epoch,
@@ -324,10 +325,10 @@ for epoch in pbar:
     val_mae_message = "val mae/rmse:"
     train_mae_message = "train mae/rmse:"
 
-    if Hypers.USE_ENERGIES:
+    if hypers.USE_ENERGIES:
         val_mae_message += f" {now['energies']['val']['mae']}/{now['energies']['val']['rmse']};"
         train_mae_message += f" {now['energies']['train']['mae']}/{now['energies']['train']['rmse']};"
-    if Hypers.USE_FORCES:
+    if hypers.USE_FORCES:
         val_mae_message += f" {now['forces']['val']['mae']}/{now['forces']['val']['rmse']}"
         train_mae_message += f" {now['forces']['train']['mae']}/{now['forces']['train']['rmse']}"
 
@@ -336,8 +337,8 @@ for epoch in pbar:
     history.append(now)
     scheduler.step()
     elapsed = time.time() - TIME_SCRIPT_STARTED
-    if Hypers.MAX_TIME is not None:
-        if elapsed > Hypers.MAX_TIME:
+    if hypers.MAX_TIME is not None:
+        if elapsed > hypers.MAX_TIME:
             break
         
 import os
@@ -358,21 +359,21 @@ def save_model(model_name, model_keeper):
     torch.save(model_keeper.best_model, f'results/{NAME_OF_CALCULATION}/{model_name}')
 
 summary = ''
-if Hypers.USE_ENERGIES:    
+if hypers.USE_ENERGIES:    
     save_model('best_val_mae_energies_model', energies_mae_model_keeper)
     summary += f'best val mae in energies: {energies_mae_model_keeper.best_error} at epoch {energies_mae_model_keeper.best_epoch}\n'
     
     save_model('best_val_rmse_energies_model', energies_rmse_model_keeper)
     summary += f'best val rmse in energies: {energies_rmse_model_keeper.best_error} at epoch {energies_rmse_model_keeper.best_epoch}\n'
     
-if Hypers.USE_FORCES:
+if hypers.USE_FORCES:
     save_model('best_val_mae_forces_model', forces_mae_model_keeper)
     summary += f'best val mae in forces: {forces_mae_model_keeper.best_error} at epoch {forces_mae_model_keeper.best_epoch}\n'
     
     save_model('best_val_rmse_forces_model', forces_rmse_model_keeper)
     summary += f'best val rmse in forces: {forces_rmse_model_keeper.best_error} at epoch {forces_rmse_model_keeper.best_epoch}\n'
     
-if Hypers.USE_ENERGIES and Hypers.USE_FORCES:
+if hypers.USE_ENERGIES and hypers.USE_FORCES:
     save_model('best_val_mae_both_model', multiplication_mae_model_keeper)
     summary += f'best both (multiplication) mae in energies: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
     

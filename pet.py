@@ -21,7 +21,6 @@ import sys
 import copy
 
 from transformer import TransformerLayer, Transformer
-from hypers import Hypers
 from molecule import batch_to_dict
 from utilities import get_rotations
 
@@ -87,87 +86,88 @@ def cutoff_func(grid, r_cut, delta):
 
 
 
-def get_activation():
-    if Hypers.ACTIVATION == 'mish':
+def get_activation(hypers):
+    if hypers.ACTIVATION == 'mish':
         return nn.Mish()
-    if Hypers.ACTIVATION == 'silu':
+    if hypers.ACTIVATION == 'silu':
         return nn.SiLU()
     raise ValueError("unknown activation")
     
 class CartesianTransformer(torch.nn.Module):
-    def __init__(self, d_model, n_head,
+    def __init__(self, hypers, d_model, n_head,
                        dim_feedforward,n_layers, 
                        dropout, n_atomic_species, add_central_token,
                        is_first):
         
         super(CartesianTransformer, self).__init__()
+        self.hypers = hypers
         self.is_first = is_first
         self.trans_layer = TransformerLayer(d_model=d_model, n_heads = n_head,
                                                 dim_feedforward = dim_feedforward,
                                                         dropout = dropout,
-                                                        activation = get_activation())
+                                                        activation = get_activation(hypers))
         self.trans = Transformer(self.trans_layer, 
                                                    num_layers=n_layers)
         
-        if Hypers.USE_ONLY_LENGTH:
+        if hypers.USE_ONLY_LENGTH:
             input_dim = 1
         else:
             input_dim = 3
-            if Hypers.USE_LENGTH:
+            if hypers.USE_LENGTH:
                 input_dim += 1
                 
                 
-        if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
-            input_dim += Hypers.SCALAR_ATTRIBUTES_SIZE
+        if hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+            input_dim += hypers.SCALAR_ATTRIBUTES_SIZE
         
-        if Hypers.R_EMBEDDING_ACTIVATION:
+        if hypers.R_EMBEDDING_ACTIVATION:
             self.r_embedding = nn.Sequential(
                 nn.Linear(input_dim, d_model),
-                get_activation())
+                get_activation(hypers))
         else:
             self.r_embedding = nn.Linear(input_dim, d_model)
             
-        if Hypers.BLEND_NEIGHBOR_SPECIES and (not is_first):
+        if hypers.BLEND_NEIGHBOR_SPECIES and (not is_first):
             n_merge = 3
         else:
             n_merge = 2
             
         self.compress = None        
-        if Hypers.COMPRESS_MODE == 'linear':
+        if hypers.COMPRESS_MODE == 'linear':
             self.compress = nn.Linear(n_merge * d_model, d_model)
-        if Hypers.COMPRESS_MODE == 'mlp':
+        if hypers.COMPRESS_MODE == 'mlp':
             self.compress = nn.Sequential(
             nn.Linear(n_merge * d_model, d_model), 
-            get_activation(), nn.Linear(d_model, d_model))
+            get_activation(hypers), nn.Linear(d_model, d_model))
         if self.compress is None:
             raise ValueError("unknown compress mode")
         
-        if Hypers.BLEND_NEIGHBOR_SPECIES and (not is_first):
+        if hypers.BLEND_NEIGHBOR_SPECIES and (not is_first):
             self.neighbor_embedder = nn.Embedding(n_atomic_species + 1, d_model)
             
         self.add_central_token = add_central_token
         if add_central_token:
             self.central_embedder = nn.Embedding(n_atomic_species + 1, d_model)
-            if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
-                if Hypers.R_EMBEDDING_ACTIVATION:
-                    self.central_scalar_embedding = nn.Sequential(nn.Linear(Hypers.SCALAR_ATTRIBUTES_SIZE, d_model),
-                                                                  get_activation())
+            if hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+                if hypers.R_EMBEDDING_ACTIVATION:
+                    self.central_scalar_embedding = nn.Sequential(nn.Linear(hypers.SCALAR_ATTRIBUTES_SIZE, d_model),
+                                                                  get_activation(hypers))
                 else:
                     self.central_scalar_embedding = nn.Linear(Hypers.SCALAR_ATTRIBUTES_SIZE, d_model)
                 
-                if Hypers.COMPRESS_MODE == 'linear':
+                if hypers.COMPRESS_MODE == 'linear':
                     self.central_compress = nn.Linear(2 * d_model, d_model)
-                if Hypers.COMPRESS_MODE == 'mlp':
+                if hypers.COMPRESS_MODE == 'mlp':
                     self.central_compress = nn.Sequential(
                         nn.Linear(2 * d_model, d_model),
-                        get_activation(),
+                        get_activation(hypers),
                         nn.Linear(d_model, d_model))
                     
         
     def forward(self, batch_dict):
         
         x = batch_dict["x"]
-        if Hypers.USE_LENGTH:
+        if self.hypers.USE_LENGTH:
             neighbor_lengths = torch.sqrt(torch.sum(x ** 2, dim = 2) + 1e-15)[:, :, None]
         central_species = batch_dict['central_species']
         neighbor_species = batch_dict['neighbor_species']
@@ -175,29 +175,29 @@ class CartesianTransformer(torch.nn.Module):
         mask = batch_dict['mask']
         batch = batch_dict['batch']
         nums = batch_dict['nums']
-        if Hypers.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
+        if self.hypers.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
             neighbor_embedding = self.neighbor_embedder(neighbor_species)
             
-        if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             neighbor_scalar_attributes = batch_dict['neighbor_scalar_attributes']
             central_scalar_attributes = batch_dict['central_scalar_attributes']
         
         initial_n_tokens = x.shape[1]
         max_number = int(torch.max(nums))
         
-        if Hypers.USE_ONLY_LENGTH:
+        if self.hypers.USE_ONLY_LENGTH:
             coordinates = [neighbor_lengths]
         else:
             coordinates = [x]
-            if Hypers.USE_LENGTH:
+            if self.hypers.USE_LENGTH:
                 coordinates.append(neighbor_lengths)
                 
-        if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             coordinates.append(neighbor_scalar_attributes)
         coordinates = torch.cat(coordinates, dim = 2)
         coordinates = self.r_embedding(coordinates)   
         
-        if Hypers.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
+        if self.hypers.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
             tokens = torch.cat([coordinates, neighbor_embedding, input_messages], dim = 2)
         else:
             tokens = torch.cat([coordinates, input_messages], dim = 2) 
@@ -207,7 +207,7 @@ class CartesianTransformer(torch.nn.Module):
         if self.add_central_token:           
             
             central_specie_embedding = self.central_embedder(central_species)
-            if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+            if self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
                 central_scalar_embedding = self.central_scalar_embedding(central_scalar_attributes)
                 central_token = torch.cat([central_specie_embedding, central_scalar_embedding], dim = 1)
                 central_token = self.central_compress(central_token)
@@ -220,7 +220,7 @@ class CartesianTransformer(torch.nn.Module):
             total_mask = torch.cat([submask[:, None], mask], dim = 1)
             
             lengths = torch.sqrt(torch.sum(x * x, dim = 2) + 1e-16)
-            multipliers = cutoff_func(lengths, Hypers.R_CUT, Hypers.CUTOFF_DELTA)   
+            multipliers = cutoff_func(lengths, self.hypers.R_CUT, self.hypers.CUTOFF_DELTA)   
             sub_multipliers = torch.ones(mask.shape[0], device = mask.device)
             multipliers = torch.cat([sub_multipliers[:, None], multipliers], dim = 1)
             multipliers[total_mask] = 0.0
@@ -242,7 +242,7 @@ class CartesianTransformer(torch.nn.Module):
             lengths = torch.sqrt(torch.sum(x * x, dim = 2) + 1e-16)
             
             
-            multipliers = cutoff_func(lengths, Hypers.R_CUT, Hypers.CUTOFF_DELTA)           
+            multipliers = cutoff_func(lengths, self.hypers.R_CUT, self.hypers.CUTOFF_DELTA)           
             multipliers[mask] = 0.0
             
             multipliers = multipliers[:, None, :]
@@ -280,10 +280,11 @@ class CentralSpecificModel(torch.nn.Module):
         return result
         
 class Head(torch.nn.Module):
-    def __init__(self, n_in, n_neurons):
-        super(Head, self).__init__()      
-        self.nn = nn.Sequential(nn.Linear(n_in, n_neurons), get_activation(),
-                                    nn.Linear(n_neurons, n_neurons), get_activation(),
+    def __init__(self, hypers, n_in, n_neurons):
+        super(Head, self).__init__()  
+        self.hypers = hypers
+        self.nn = nn.Sequential(nn.Linear(n_in, n_neurons), get_activation(hypers),
+                                    nn.Linear(n_neurons, n_neurons), get_activation(hypers),
                                     nn.Linear(n_neurons, 1))
        
     def forward(self, batch_dict):
@@ -293,13 +294,14 @@ class Head(torch.nn.Module):
     
     
 class PET(torch.nn.Module):
-    def __init__(self, transformer_d_model, transformer_n_head,
+    def __init__(self, hypers, transformer_d_model, transformer_n_head,
                        transformer_dim_feedforward, transformer_n_layers, 
                        transformer_dropout, n_atomic_species, 
                        n_gnn_layers, head_n_neurons, 
                        transformers_central_specific, 
                        heads_central_specific, add_central_tokens):
         super(PET, self).__init__()
+        self.hypers = hypers
         self.task = 'both'
         self.embedding = nn.Embedding(n_atomic_species + 1, transformer_d_model)
             
@@ -310,7 +312,7 @@ class PET(torch.nn.Module):
                     is_first = True
                 else:
                     is_first = False
-                models = {str(i): CartesianTransformer(transformer_d_model, transformer_n_head,
+                models = {str(i): CartesianTransformer(hypers, transformer_d_model, transformer_n_head,
                                                    transformer_dim_feedforward, transformer_n_layers, 
                                                    transformer_dropout, n_atomic_species, add_central_tokens[layer_index], 
                                                        is_first)
@@ -323,7 +325,7 @@ class PET(torch.nn.Module):
                     is_first = True
                 else:
                     is_first = False
-                model = CartesianTransformer(transformer_d_model, transformer_n_head,
+                model = CartesianTransformer(hypers, transformer_d_model, transformer_n_head,
                                                    transformer_dim_feedforward, transformer_n_layers, 
                                                    transformer_dropout, n_atomic_species, add_central_tokens[layer_index],
                                              is_first)
@@ -334,32 +336,32 @@ class PET(torch.nn.Module):
         heads = []
         if heads_central_specific:
             for _ in range(n_gnn_layers):
-                models = {str(i): Head(transformer_d_model, head_n_neurons) 
+                models = {str(i): Head(hypers, transformer_d_model, head_n_neurons) 
                          for i in range(len(all_species))}
                 heads.append(CentralSpecificModel(models))
                 
-            models = {str(i): Head(transformer_d_model, head_n_neurons) 
+            models = {str(i): Head(hypers, transformer_d_model, head_n_neurons) 
                          for i in range(len(all_species))}
         else:
             for _ in range(n_gnn_layers):
-                heads.append(Head(transformer_d_model, head_n_neurons))
+                heads.append(Head(hypers, transformer_d_model, head_n_neurons))
         
         self.heads = torch.nn.ModuleList(heads)
         
         
-        if Hypers.USE_BOND_ENERGIES:
+        if hypers.USE_BOND_ENERGIES:
             bond_heads = []
             if heads_central_specific:
                 for _ in range(n_gnn_layers):
-                    models = {str(i): Head(transformer_d_model, head_n_neurons) 
+                    models = {str(i): Head(hypers, transformer_d_model, head_n_neurons) 
                              for i in range(len(all_species))}
                     bond_heads.append(CentralSpecificModel(models))
 
-                models = {str(i): Head(transformer_d_model, head_n_neurons) 
+                models = {str(i): Head(hypers, transformer_d_model, head_n_neurons) 
                              for i in range(len(all_species))}
             else:
                 for _ in range(n_gnn_layers):
-                    bond_heads.append(Head(transformer_d_model, head_n_neurons))
+                    bond_heads.append(Head(hypers, transformer_d_model, head_n_neurons))
 
             self.bond_heads = torch.nn.ModuleList(bond_heads)
       
@@ -367,7 +369,7 @@ class PET(torch.nn.Module):
         #print(multipliers[0, :])
         messages_proceed = messages * multipliers[:, :, None]
         messages_proceed[mask] = 0.0
-        if Hypers.AVERAGE_POOLING:
+        if self.hypers.AVERAGE_POOLING:
             pooled = messages_proceed.sum(dim = 1) / nums[:, None]
         else:
             pooled = messages_proceed.sum(dim = 1)
@@ -380,7 +382,7 @@ class PET(torch.nn.Module):
         predictions = head({'pooled' : messages, 
                                      'central_species' : central_species})['atomic_energies']
         predictions[mask] = 0.0
-        if Hypers.AVERAGE_BOND_ENERGIES:
+        if self.hypers.AVERAGE_BOND_ENERGIES:
             result = predictions.sum(dim = 1) / nums
         else:
             result = predictions.sum(dim = 1)
@@ -405,7 +407,7 @@ class PET(torch.nn.Module):
         nums = batch_dict['nums']
         
         lengths = torch.sqrt(torch.sum(x * x, dim = 2) + 1e-16)
-        multipliers = cutoff_func(lengths, Hypers.R_CUT, Hypers.CUTOFF_DELTA) 
+        multipliers = cutoff_func(lengths, self.hypers.R_CUT, self.hypers.CUTOFF_DELTA) 
         
         neighbors_index = batch_dict['neighbors_index']
         neighbors_pos = batch_dict['neighbors_pos']
@@ -417,7 +419,7 @@ class PET(torch.nn.Module):
             head = self.heads[layer_index]
             gnn_layer = self.gnn_layers[layer_index]
             
-            if Hypers.USE_BOND_ENERGIES:
+            if self.hypers.USE_BOND_ENERGIES:
                 bond_head = self.bond_heads[layer_index]
                 
             result = gnn_layer(batch_dict)
@@ -433,7 +435,7 @@ class PET(torch.nn.Module):
             else:
                  atomic_energies = atomic_energies + self.get_predictions_messages(output_messages, mask, nums, head, central_species, multipliers)
                     
-            if Hypers.USE_BOND_ENERGIES:
+            if self.hypers.USE_BOND_ENERGIES:
                 atomic_energies = atomic_energies + self.get_predictions_messages_bonds(output_messages,
                                                                                     mask, nums, bond_head, central_species)
        
@@ -446,7 +448,7 @@ class PET(torch.nn.Module):
         if self.augmentation:
             #print("here")
             indices = batch.batch.cpu().data.numpy()
-            rotations = torch.FloatTensor(get_rotations(indices, global_aug = Hypers.GLOBAL_AUG)).to(batch.x.device)
+            rotations = torch.FloatTensor(get_rotations(indices, global_aug = self.hypers.GLOBAL_AUG)).to(batch.x.device)
             batch.x_initial = batch.x.clone().detach()
             batch.x_initial.requires_grad = True
             batch.x = torch.bmm(batch.x_initial, rotations)
@@ -458,7 +460,7 @@ class PET(torch.nn.Module):
         self.task = 'energies'
         predictions = self(batch)
         self.task = 'both'
-        if Hypers.USE_FORCES:
+        if self.hypers.USE_FORCES:
             grads  = torch.autograd.grad(predictions, batch.x_initial, grad_outputs = torch.ones_like(predictions),
                                     create_graph = True)[0]
             neighbors_index = batch.neighbors_index.transpose(0, 1)
@@ -470,14 +472,14 @@ class PET(torch.nn.Module):
             second = grads_messaged.sum(dim = 1)
         
         result = []
-        if Hypers.USE_ENERGIES:
+        if self.hypers.USE_ENERGIES:
             result.append(predictions)
             result.append(batch.y)
         else:
             result.append(None)
             result.append(None)
             
-        if Hypers.USE_FORCES:
+        if self.hypers.USE_FORCES:
             result.append(first - second)
             result.append(batch.forces)
         else:

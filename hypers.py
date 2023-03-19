@@ -81,15 +81,16 @@ def combine_hypers(provided_hypers, default_hypers):
     return result
 
 class Hypers():
-    is_set = False
+    def __init__(self):
+        self.is_set = False
     
-    @staticmethod
-    def set_from_dict(hypers_dict):
-        if Hypers.is_set:
+    
+    def set_from_dict(self, hypers_dict):
+        if self.is_set:
             raise ValueError("Hypers are already set")
         for k, v in hypers_dict.items():
-            setattr(Hypers, k, v)
-        Hypers.is_set = True
+            setattr(self, k, v)
+        self.is_set = True
         
     @staticmethod 
     def fix_Nones_in_yaml(hypers_dict):
@@ -97,9 +98,9 @@ class Hypers():
             if (hypers_dict[key] == 'None') or (hypers_dict[key] == 'none'):
                 hypers_dict[key] = None
               
-    @staticmethod
-    def load_from_file(path_to_hypers):
-        if Hypers.is_set:
+    
+    def load_from_file(self, path_to_hypers):
+        if self.is_set:
             raise ValueError("Hypers are already set")
             
         loader = yaml.SafeLoader
@@ -118,13 +119,13 @@ class Hypers():
             hypers = yaml.load(f, Loader = loader)
             Hypers.fix_Nones_in_yaml(hypers)
             
-        Hypers.set_from_dict(hypers)      
+        self.set_from_dict(hypers)      
         
     
             
-    @staticmethod
-    def set_from_files(path_to_provided_hypers, path_to_default_hypers):
-        if Hypers.is_set:
+    
+    def set_from_files(self, path_to_provided_hypers, path_to_default_hypers):
+        if self.is_set:
             raise ValueError("Hypers are already set")
             
         loader = yaml.SafeLoader
@@ -148,7 +149,7 @@ class Hypers():
             Hypers.fix_Nones_in_yaml(default_hypers)
         
         combined_hypers = combine_hypers(provided_hypers, default_hypers)
-        Hypers.set_from_dict(combined_hypers)
+        self.set_from_dict(combined_hypers)
         
        
 
