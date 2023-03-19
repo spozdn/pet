@@ -91,25 +91,25 @@ class SPFramesCalculator():
                 first_length = get_length(first_vector)
                 second_length = get_length(second_vector)
 
-                value_now = smooth_max([first_length, second_length], self.sp_hypers.beta)
+                value_now = smooth_max([first_length, second_length], self.sp_hypers.BETA)
                 #print(value_now, self.T_func(self.sp_hypers.beta))
-                value_now = value_now + self.T_func(self.sp_hypers.beta)
+                value_now = value_now + self.T_func(self.sp_hypers.BETA)
 
                 values.append(value_now)
 
-                first_weight_now = cutoff_func(first_length[None], r_cut_outer, self.sp_hypers.delta)[0]
-                second_weight_now = cutoff_func(second_length[None], r_cut_outer, self.sp_hypers.delta)[0]
+                first_weight_now = cutoff_func(first_length[None], r_cut_outer, self.sp_hypers.DELTA)[0]
+                second_weight_now = cutoff_func(second_length[None], r_cut_outer, self.sp_hypers.DELTA)[0]
 
                 first_normalized = get_normalized(first_vector)
                 second_normalized = get_normalized(second_vector)
 
                 vec_product = torch.cross(first_normalized, second_normalized)
-                third_weight_now = get_q_func(torch.sum(vec_product ** 2)[None], self.sp_hypers.w, self.sp_hypers.delta)[0]
+                third_weight_now = get_q_func(torch.sum(vec_product ** 2)[None], self.sp_hypers.W, self.sp_hypers.DELTA)[0]
 
                 weight_now = first_weight_now * second_weight_now * third_weight_now
                 weights.append(weight_now)
         
-        return smooth_max_weighted(values, weights, -self.sp_hypers.beta)
+        return smooth_max_weighted(values, weights, -self.sp_hypers.BETA)
     
     
     def get_all_frames(self, env, r_cut_outer):
@@ -130,12 +130,12 @@ class SPFramesCalculator():
 
                         vec_product = torch.cross(first_normalized, second_normalized)
                         spread = torch.sum(vec_product ** 2)
-                        if spread > self.sp_hypers.w:
+                        if spread > self.sp_hypers.W:
                             coor_system = get_coor_system(first_vec, second_vec)
 
-                            first_weight = cutoff_func(first_length[None], r_cut_inner, self.sp_hypers.delta)[0]
-                            second_weight = cutoff_func(second_length[None], r_cut_inner, self.sp_hypers.delta)[0]
-                            third_weight = get_q_func(spread, self.sp_hypers.w, self.sp_hypers.delta)
+                            first_weight = cutoff_func(first_length[None], r_cut_inner, self.sp_hypers.DELTA)[0]
+                            second_weight = cutoff_func(second_length[None], r_cut_inner, self.sp_hypers.DELTA)[0]
+                            third_weight = get_q_func(spread, self.sp_hypers.W, self.sp_hypers.DELTA)
 
                             weight = first_weight * second_weight * third_weight
 

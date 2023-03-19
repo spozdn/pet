@@ -42,6 +42,7 @@ SELF_CONTRIBUTIONS_PATH = sys.argv[5]
 bool_map = {'True' : True, 'False' : False}
 USE_AUG = bool_map[sys.argv[6]]
 N_AUG = int(sys.argv[7])
+SP_HYPERS_PATH = sys.argv[8]
 
 hypers = Hypers()
 hypers.load_from_file(HYPERS_PATH)
@@ -169,7 +170,8 @@ class PETSP(torch.nn.Module):
         return result
     
 
-sp_hypers = SPHypers(2.0, 0.5, 0.2)
+sp_hypers = Hypers()
+sp_hypers.load_from_file(SP_HYPERS_PATH)
 sp_frames_calculator = SPFramesCalculator(sp_hypers)
 
 if USE_AUG:
