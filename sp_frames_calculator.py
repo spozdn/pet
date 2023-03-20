@@ -63,13 +63,7 @@ def get_coor_system(first_vec, second_vec):
                        vec_product_normalized[None, :],
                        last_one[None, :]]
         coor_system = torch.cat(coor_system, axis = 0)
-        return torch.transpose(coor_system, -1, -2)
-
-class SPHypers():
-    def __init__(self, beta, delta, w):
-        self.beta = beta
-        self.delta = delta
-        self.w = w        
+        return torch.transpose(coor_system, -1, -2)  
         
 
 class SPFramesCalculator():
@@ -146,7 +140,7 @@ class SPFramesCalculator():
     
     
     
-    def get_all_frames_global(self, envs_list, r_cut_outer):
+    def get_all_frames_global(self, envs_list, r_cut_outer, epsilon = 1e-10):
         coor_systems, weights = [], []
         for env in envs_list:
             coor_systems_now, weights_now = self.get_all_frames(env, r_cut_outer)
@@ -156,6 +150,24 @@ class SPFramesCalculator():
 
             for el in weights_now:
                 weights.append(el)
-        return coor_systems, weights
+        
+        if len(weights) == 0:
+            return [], [], 1.0
+        
+        
+        max_weight = smooth_max(weights, self.sp_hypers.BETA)
+        factors = get_q_func(torch.cat([weight[None] for weight in weights]), max_weight * self.sp_hypers.PRUNNING_THRESHOLD, max_weight * self.sp_hypers.PRUNNING_THRESHOLD_DELTA)
+        #print(factors)
+        #print(max_weight)
+        coor_systems_final, weights_final = [], []
+        for i in range(len(weights)):
+            now = weights[i] * factors[i]
+            if now > epsilon:
+                weights_final.append(now)
+                coor_systems_final.append(coor_systems[i])
+        
+        weight_aug = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA)[0]
+        
+        return coor_systems_final, weights_final, weight_aug
     
     
