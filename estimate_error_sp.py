@@ -34,15 +34,21 @@ from analysis import get_structural_batch_size, convert_atomic_throughput
 from sp_frames_calculator import SPFramesCalculator, SPHypers
 
 STRUCTURES_PATH = sys.argv[1]
-HYPERS_PATH = sys.argv[2]
-PATH_TO_MODEL_STATE_DICT = sys.argv[3]
-ALL_SPECIES_PATH = sys.argv[4]
-SELF_CONTRIBUTIONS_PATH = sys.argv[5]
+PATH_TO_CALC_FOLDER = sys.argv[2]
+CHECKPOINT = sys.argv[3]
+
 
 bool_map = {'True' : True, 'False' : False}
-USE_AUG = bool_map[sys.argv[6]]
-N_AUG = int(sys.argv[7])
-SP_HYPERS_PATH = sys.argv[8]
+USE_AUG = bool_map[sys.argv[4]]
+N_AUG = int(sys.argv[5])
+SP_HYPERS_PATH = sys.argv[6]
+
+
+HYPERS_PATH = PATH_TO_CALC_FOLDER + '/hypers_used.yaml'
+PATH_TO_MODEL_STATE_DICT = PATH_TO_CALC_FOLDER + '/' + CHECKPOINT + '_state_dict'
+ALL_SPECIES_PATH = PATH_TO_CALC_FOLDER + '/all_species.npy'
+SELF_CONTRIBUTIONS_PATH = PATH_TO_CALC_FOLDER + '/self_contributions.npy'
+
 
 hypers = Hypers()
 hypers.load_from_file(HYPERS_PATH)
