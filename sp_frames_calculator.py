@@ -92,14 +92,14 @@ class SPFramesCalculator():
 
                 values.append(value_now)
 
-                first_weight_now = cutoff_func(first_length[None], r_cut_outer, self.sp_hypers.DELTA)[0]
-                second_weight_now = cutoff_func(second_length[None], r_cut_outer, self.sp_hypers.DELTA)[0]
+                first_weight_now = cutoff_func(first_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT)[0]
+                second_weight_now = cutoff_func(second_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT)[0]
 
                 first_normalized = get_normalized(first_vector)
                 second_normalized = get_normalized(second_vector)
 
                 vec_product = torch.cross(first_normalized, second_normalized)
-                third_weight_now = get_q_func(torch.sum(vec_product ** 2)[None], self.sp_hypers.W, self.sp_hypers.DELTA)[0]
+                third_weight_now = get_q_func(torch.sum(vec_product ** 2)[None], self.sp_hypers.W_R_CUT, self.sp_hypers.DELTA_R_CUT_W)[0]
 
                 weight_now = first_weight_now * second_weight_now * third_weight_now
                 weights.append(weight_now)
@@ -125,12 +125,12 @@ class SPFramesCalculator():
 
                         vec_product = torch.cross(first_normalized, second_normalized)
                         spread = torch.sum(vec_product ** 2)
-                        if spread > self.sp_hypers.W:
+                        if spread > self.sp_hypers.W_R_CUT:
                             coor_system = get_coor_system(first_vec, second_vec)
 
-                            first_weight = cutoff_func(first_length[None], r_cut_inner, self.sp_hypers.DELTA)[0]
-                            second_weight = cutoff_func(second_length[None], r_cut_inner, self.sp_hypers.DELTA)[0]
-                            third_weight = get_q_func(spread, self.sp_hypers.W, self.sp_hypers.DELTA)
+                            first_weight = cutoff_func(first_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT)[0]
+                            second_weight = cutoff_func(second_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT)[0]
+                            third_weight = get_q_func(spread, self.sp_hypers.W_R_CUT, self.sp_hypers.DELTA_R_CUT_W)
 
                             weight = first_weight * second_weight * third_weight
 
@@ -168,7 +168,7 @@ class SPFramesCalculator():
                 coor_systems_final.append(coor_systems[i])
         
         weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA)[0]
-        #print(type(weight_aux))
+        #print(max_weight, weight_aux)
         return coor_systems_final, weights_final, weight_aux
     
     

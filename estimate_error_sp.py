@@ -125,7 +125,7 @@ USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA = hypers_main.USE_ADDITIONAL_SCALAR_ATTRIB
 USE_FORCES = hypers_main.USE_FORCES and hypers_aux.USE_FORCES
 USE_ENERGIES = hypers_main.USE_ENERGIES and hypers_aux.USE_ENERGIES
 
-structures = ase.io.read(STRUCTURES_PATH, index = '75:100')
+structures = ase.io.read(STRUCTURES_PATH, index = ':')
 
 molecules = [Molecule(structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA, USE_FORCES) for structure in tqdm(structures)]
 max_nums = [molecule.get_max_num() for molecule in molecules]
@@ -199,7 +199,7 @@ class PETSP(torch.nn.Module):
                 
         if weight_aux > EPSILON:
             weight_accumulated += weight_aux
-            predictions_accumulated += self.model_aux(batch)
+            predictions_accumulated += self.model_aux(batch) * weight_aux
         
         return predictions_accumulated / weight_accumulated, len(frames), weight_aux
     
@@ -297,7 +297,7 @@ if USE_FORCES:
 
     
 print("Average number of active coordinate systems: ", np.mean(n_frames_used))
-
+print("aux_weights: ", aux_weights)
 n_fully_aux, n_partially_aux = 0, 0
 for weight in aux_weights:
     if np.abs(weight - 1.0) < EPSILON:
