@@ -35,7 +35,8 @@ STRUCTURES_PATH = sys.argv[1]
 PATH_TO_CALC_FOLDER = sys.argv[2]
 CHECKPOINT = sys.argv[3]
 N_AUG = int(sys.argv[4])
-
+DEFAULT_HYPERS_PATH = sys.argv[5]
+BATCH_SIZE = sys.argv[6]
 
 HYPERS_PATH = PATH_TO_CALC_FOLDER + '/hypers_used.yaml'
 PATH_TO_MODEL_STATE_DICT = PATH_TO_CALC_FOLDER + '/' + CHECKPOINT + '_state_dict'
@@ -50,7 +51,15 @@ SELF_CONTRIBUTIONS_PATH = 'results/test_calc_continuation_0/self_contributions.n
 PATH_TO_MODEL_STATE_DICT = 'results/test_calc_continuation_0/best_val_mae_energies_model_state_dict' '''
 
 hypers = Hypers()
-hypers.load_from_file(HYPERS_PATH)
+# loading default values for the new hypers potentially added into the codebase after the calculation is done
+# assuming that the default values do not change the logic
+hypers.set_from_files(HYPERS_PATH, DEFAULT_HYPERS_PATH)
+
+if BATCH_SIZE == 'None':
+    BATCH_SIZE = hypers.STRUCTURAL_BATCH_SIZE
+else:
+    BATCH_SIZE = int(BATCH_SIZE)
+    
 structures = ase.io.read(STRUCTURES_PATH, index = ':')
 
 all_species = np.load(ALL_SPECIES_PATH)
@@ -63,9 +72,9 @@ max_num = np.max(max_nums)
 graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)]
 
 if hypers.MULTI_GPU:
-    loader = DataListLoader(graphs, batch_size=hypers.STRUCTURAL_BATCH_SIZE, shuffle=False)
+    loader = DataListLoader(graphs, batch_size=BATCH_SIZE, shuffle=False)
 else:        
-    loader = DataLoader(graphs, batch_size=hypers.STRUCTURAL_BATCH_SIZE, shuffle=False)
+    loader = DataLoader(graphs, batch_size=BATCH_SIZE, shuffle=False)
 
 add_tokens = []
 for _ in range(hypers.N_GNN_LAYERS - 1):

@@ -47,7 +47,7 @@ bool_map = {'True' : True, 'False' : False}
 USE_AUG = bool_map[sys.argv[6]]
 N_AUG = int(sys.argv[7])
 SP_HYPERS_PATH = sys.argv[8]
-
+DEFAULT_HYPERS_PATH = sys.argv[9]
 
 def load_model(path_to_calc_folder, checkpoint):
     hypers_path = path_to_calc_folder + '/hypers_used.yaml'
@@ -56,7 +56,10 @@ def load_model(path_to_calc_folder, checkpoint):
     self_contributions_path = path_to_calc_folder + '/self_contributions.npy'
     
     hypers = Hypers()
-    hypers.load_from_file(hypers_path)
+    
+    # loading default values for the new hypers potentially added into the codebase after the calculation is done
+    # assuming that the default values do not change the logic
+    hypers.set_from_files(hypers_path, DEFAULT_HYPERS_PATH)
     
     all_species = np.load(all_species_path)
     if hypers.USE_ENERGIES:
