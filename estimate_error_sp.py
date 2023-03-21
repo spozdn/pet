@@ -179,6 +179,7 @@ class PETSP(torch.nn.Module):
             return self.get_targets(batch)        
         
         frames, weights, weight_aux = self.get_all_frames(batch)
+        #print('weight aux: ', type(weight_aux), weight_aux)
         batch.x_initial = batch.x
         #print(len(frames))
         predictions_accumulated = 0.0
@@ -200,7 +201,7 @@ class PETSP(torch.nn.Module):
             weight_accumulated += weight_aux
             predictions_accumulated += self.model_aux(batch)
         
-        return predictions_accumulated / weight_accumulated
+        return predictions_accumulated / weight_accumulated, len(frames), weight_aux
     
     def get_targets(self, batch):
         
@@ -209,7 +210,7 @@ class PETSP(torch.nn.Module):
         batch.x = batch.x_initial
         
         self.task = 'energies'
-        predictions = self(batch)
+        predictions, n_frames, weight_aux = self(batch)
         self.task = 'both'
         if self.use_forces:
             grads  = torch.autograd.grad(predictions, batch.x_initial, grad_outputs = torch.ones_like(predictions),
@@ -222,7 +223,7 @@ class PETSP(torch.nn.Module):
             grads_messaged[batch.mask] = 0.0
             second = grads_messaged.sum(dim = 1)
         
-        result = []
+        result = [n_frames, weight_aux]
         if self.use_energies:
             result.append(predictions)
             result.append(batch.y)
@@ -263,10 +264,13 @@ if USE_FORCES:
 
 #print("len loader: ", len(loader), len(molecules))
 
+n_frames_used, aux_weights = [], []
 for batch in tqdm(loader):
     #print(batch)
     batch.cuda()
-    predictions_energies, targets_energies, predictions_forces, targets_forces = model_sp(batch)
+    n_frames, aux_weight, predictions_energies, targets_energies, predictions_forces, targets_forces = model_sp(batch)
+    n_frames_used.append(n_frames)
+    aux_weights.append(float(aux_weight.data.cpu().numpy()))
     if USE_ENERGIES:
         energies_predicted.append(predictions_energies.data.cpu().numpy())
     if USE_FORCES:
@@ -291,6 +295,20 @@ if USE_FORCES:
     all_forces_predicted = np.concatenate(all_forces_predicted, axis = 0)
     forces_predicted_mean = np.mean(all_forces_predicted, axis = 0)
 
+    
+print("Average number of active coordinate systems: ", np.mean(n_frames_used))
+
+n_fully_aux, n_partially_aux = 0, 0
+for weight in aux_weights:
+    if np.abs(weight - 1.0) < EPSILON:
+        n_fully_aux += 1
+    else:
+        if weight > EPSILON:
+            n_partially_aux += 1
+            
+print("The number of structures handled completely by auxiliary model is: ", n_fully_aux, ';', n_fully_aux / len(aux_weights))
+print("The number of structures handled partially by auxiliary model is: ", n_partially_aux, ';', n_partially_aux / len(aux_weights))
+
 if USE_ENERGIES:
     compositional_features = get_compositional_features(structures, all_species)
     self_contributions_energies = []
@@ -306,3 +324,4 @@ if USE_ENERGIES:
 if USE_FORCES:
     print(f"forces mae per component: {get_mae(forces_ground_truth, forces_predicted_mean)}")
     print(f"forces rmse per component: {get_rmse(forces_ground_truth, forces_predicted_mean)}")
+    

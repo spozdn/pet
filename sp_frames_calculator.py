@@ -38,6 +38,7 @@ def cutoff_func(grid, r_cut, delta):
     
     f[mask_bigger] = 0.0
     f[mask_smaller] = 1.0
+      
     return f
 
 
@@ -103,7 +104,7 @@ class SPFramesCalculator():
                 weight_now = first_weight_now * second_weight_now * third_weight_now
                 weights.append(weight_now)
         
-        return smooth_max_weighted(values, weights, -self.sp_hypers.BETA)
+        return smooth_max_weighted(values, weights, -self.sp_hypers.BETA) #smooth_min with -beta
     
     
     def get_all_frames(self, env, r_cut_outer):
@@ -152,7 +153,7 @@ class SPFramesCalculator():
                 weights.append(el)
         
         if len(weights) == 0:
-            return [], [], 1.0
+            return [], [], torch.tensor(1.0, dtype = torch.float32).to(envs_list[0].device)
         
         
         max_weight = smooth_max(weights, self.sp_hypers.BETA)
@@ -166,8 +167,8 @@ class SPFramesCalculator():
                 weights_final.append(now)
                 coor_systems_final.append(coor_systems[i])
         
-        weight_aug = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA)[0]
-        
-        return coor_systems_final, weights_final, weight_aug
+        weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA)[0]
+        #print(type(weight_aux))
+        return coor_systems_final, weights_final, weight_aux
     
     
