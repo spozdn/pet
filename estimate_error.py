@@ -53,7 +53,7 @@ PATH_TO_MODEL_STATE_DICT = 'results/test_calc_continuation_0/best_val_mae_energi
 hypers = Hypers()
 # loading default values for the new hypers potentially added into the codebase after the calculation is done
 # assuming that the default values do not change the logic
-hypers.set_from_files(HYPERS_PATH, DEFAULT_HYPERS_PATH)
+hypers.set_from_files(HYPERS_PATH, DEFAULT_HYPERS_PATH, check_dublicated = False)
 
 if BATCH_SIZE == 'None':
     BATCH_SIZE = hypers.STRUCTURAL_BATCH_SIZE
