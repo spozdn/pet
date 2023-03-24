@@ -221,9 +221,7 @@ for epoch in pbar:
         else:
             model.module.augmentation = True
         
-        predictions_dipoles, targets_dipoles, predictions_forces, targets_forces = model(batch)
-
-        
+        predictions_dipoles, targets_dipoles, _, _ = model(batch)
        
         dipoles_logger.train_logger.update(predictions_dipoles, targets_dipoles)
         loss_dipoles = get_loss(predictions_dipoles, targets_dipoles)
@@ -242,7 +240,7 @@ for epoch in pbar:
         else:
             model.module.augmentation = False
             
-        predictions_dipoles, targets_dipoles, predictions_forces, targets_forces = model(batch)
+        predictions_dipoles, targets_dipoles, _, _ = model(batch)
         
         dipoles_logger.val_logger.update(predictions_dipoles, targets_dipoles)
 
