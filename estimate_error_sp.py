@@ -112,16 +112,6 @@ def load_model(path_to_calc_folder, checkpoint):
     return model, hypers, all_species, self_contributions
     
 model_main, hypers_main, all_species_main, self_contributions_main = load_model(PATH_TO_CALC_FOLDER_MAIN, CHECKPOINT_MAIN)
-model_aux, hypers_aux, all_species_aux, self_contributions_aug = load_model(PATH_TO_CALC_FOLDER_AUX, CHECKPOINT_AUX)
-
-print("self contributions main", self_contributions_main)
-print("self contributions aug", self_contributions_aug)
-print("self contributions delta", self_contributions_main - self_contributions_aug)
-
-if np.abs(hypers_aux.R_CUT - hypers_main.R_CUT) > EPSILON:
-    raise ValueError("R_CUT of main and aug models should be same in the current implementation")
-
-R_CUT = hypers_main.R_CUT
 
 def are_same(first, second):
     if len(first) != len(second):
@@ -132,20 +122,40 @@ def are_same(first, second):
             return False
     return True
 
-if are_same(self_contributions_main, self_contributions_aug):
-    self_contributions = self_contributions_main
-else:
-    raise ValueError("self contributions should be same (in this rudementary implementation)")
+if PATH_TO_CALC_FOLDER_AUX == 'None' or PATH_TO_CALC_FOLDER_AUX == 'none':
+    model_aux, hypers_aux, all_species_aux, self_contributions_aux = None, None, None, None
     
-if are_same(all_species_main, all_species_aux):
-    all_species = all_species_main
+    USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA = hypers_main.USE_ADDITIONAL_SCALAR_ATTRIBUTES 
+    USE_FORCES = hypers_main.USE_FORCES
+    USE_ENERGIES = hypers_main.USE_ENERGIES
 else:
-    raise ValueError("all species should be same")
+    model_aux, hypers_aux, all_species_aux, self_contributions_aux = load_model(PATH_TO_CALC_FOLDER_AUX, CHECKPOINT_AUX)
 
-USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA = hypers_main.USE_ADDITIONAL_SCALAR_ATTRIBUTES or hypers_aux.USE_ADDITIONAL_SCALAR_ATTRIBUTES
+    print("self contributions main", self_contributions_main)
+    print("self contributions aux", self_contributions_aux)
+    print("self contributions delta", self_contributions_main - self_contributions_aux)
 
-USE_FORCES = hypers_main.USE_FORCES and hypers_aux.USE_FORCES
-USE_ENERGIES = hypers_main.USE_ENERGIES and hypers_aux.USE_ENERGIES
+    if np.abs(hypers_aux.R_CUT - hypers_main.R_CUT) > EPSILON:
+        raise ValueError("R_CUT of main and aux models should be same in the current implementation")
+
+    if not are_same(self_contributions_main, self_contributions_aux):
+        raise ValueError("self contributions should be same (in this rudementary implementation)")
+        
+    if not are_same(all_species_main, all_species_aux):
+        raise ValueError("all species should be same")
+        
+    USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA = hypers_main.USE_ADDITIONAL_SCALAR_ATTRIBUTES or hypers_aux.USE_ADDITIONAL_SCALAR_ATTRIBUTES
+
+    USE_FORCES = hypers_main.USE_FORCES and hypers_aux.USE_FORCES
+    USE_ENERGIES = hypers_main.USE_ENERGIES and hypers_aux.USE_ENERGIES
+
+        
+R_CUT = hypers_main.R_CUT
+self_contributions = self_contributions_main
+all_species = all_species_main
+
+    
+
 
 structures = ase.io.read(STRUCTURES_PATH, index = ':')
 
@@ -177,7 +187,8 @@ class PETSP(torch.nn.Module):
         self.model_main = model_main
         self.model_aux = model_aux
         self.model_main.task = 'energies'
-        self.model_aux.task = 'energies'
+        if self.model_aux is not None:
+            self.model_aux.task = 'energies'
         
         
         self.sp_frames_calculator = sp_frames_calculator
@@ -247,10 +258,10 @@ class PETSP(torch.nn.Module):
                     num_handled = 0
                 
         if weight_aux > EPSILON:
-            
-            batch.x = x_initial
-            predictions_accumulated = predictions_accumulated + self.model_aux(batch) * weight_aux
-            num_handled += 1
+            if self.model_aux is not None:
+                batch.x = x_initial
+                predictions_accumulated = predictions_accumulated + self.model_aux(batch) * weight_aux
+                num_handled += 1
             
         if num_handled > 0:
             
@@ -264,6 +275,7 @@ class PETSP(torch.nn.Module):
             
     def forward(self, batch):
         predictions_total, forces_predicted_total = 0.0, 0.0
+        n_frames = None
         for predictions, grads, n_frames, weight_aux in self.get_all_contributions(batch):
             predictions_total += predictions
             if self.use_forces:
@@ -276,7 +288,9 @@ class PETSP(torch.nn.Module):
                 second = grads_messaged.sum(dim = 1)
                 forces_predicted = first - second
                 forces_predicted_total += forces_predicted
-                
+            
+        if n_frames is None:
+            raise ValueError("all collinear problem happened, but aux model was not provided")
         result = [n_frames, weight_aux]
         if self.use_energies:
             result.append(predictions_total)
