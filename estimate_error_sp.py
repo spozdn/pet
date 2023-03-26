@@ -33,6 +33,8 @@ from analysis import get_structural_batch_size, convert_atomic_throughput
 
 from sp_frames_calculator import SPFramesCalculator
 
+np.random.seed(0)
+
 EPSILON = 1e-10
 
 STRUCTURES_PATH = sys.argv[1]
@@ -45,10 +47,27 @@ CHECKPOINT_AUX = sys.argv[5]
 
 bool_map = {'True' : True, 'False' : False}
 USE_AUG = bool_map[sys.argv[6]]
-N_AUG = int(sys.argv[7])
+
+N_AUG = sys.argv[7]
+if N_AUG == 'None' or N_AUG == 'none':
+    N_AUG = None
+else:
+    N_AUG = int(sys.argv[7])
+
 SP_HYPERS_PATH = sys.argv[8]
 DEFAULT_HYPERS_PATH = sys.argv[9]
 
+# Only one rotation of only one configuration is supplied to a model at the same time.
+# So huge batch size sp would not speed up the calculation
+# The purpose of batch_size_sp is that pytorch graph is freed after handling batch_size_sp rotations from symmetrization protocol
+# So low batch_size_sp can help fit the calculation into the gpu memory
+BATCH_SIZE_SP = int(sys.argv[10])
+
+if (not USE_AUG) and (N_AUG is not None):
+    raise ValueError("if additional augmentation is not used N_AUG should be None")
+if USE_AUG and (N_AUG is None):
+    raise ValueError("if additional augmentation is used N_AUG should be provided")
+    
 def load_model(path_to_calc_folder, checkpoint):
     hypers_path = path_to_calc_folder + '/hypers_used.yaml'
     path_to_model_state_dict = path_to_calc_folder + '/' + checkpoint + '_state_dict'
@@ -162,7 +181,7 @@ class PETSP(torch.nn.Module):
         
         
         self.sp_frames_calculator = sp_frames_calculator
-        self.task = 'both'
+        
         self.additional_rotations = additional_rotations
         if self.additional_rotations is None:
             self.additional_rotations = [torch.eye(3)]
@@ -177,72 +196,105 @@ class PETSP(torch.nn.Module):
         r_cut = torch.tensor(self.r_cut, device = batch.x.device)
         return self.sp_frames_calculator.get_all_frames_global(all_envs, r_cut)
     
-    def forward(self, batch):        
-        if self.task == 'both':
-            return self.get_targets(batch)        
+    def get_all_contributions(self, batch):
+        x_initial = batch.x
+        x_initial.requires_grad = True
         
+        batch.x = x_initial
         frames, weights, weight_aux = self.get_all_frames(batch)
-        #print('weight aux: ', type(weight_aux), weight_aux)
-        batch.x_initial = batch.x
-        #print(len(frames))
-        predictions_accumulated = 0.0
-        weight_accumulated = 0.0
         
+        weight_accumulated = 0.0
+        for weight in weights:
+            weight_accumulated = weight_accumulated + weight
+        weight_accumulated = weight_accumulated * len(self.additional_rotations)
+        weight_accumulated = weight_accumulated + weight_aux
+        
+        predictions_accumulated = 0.0
+        num_handled = 0
         for additional_rotation in self.additional_rotations:
             additional_rotation = additional_rotation.to(batch.x.device)
-            for frame, weight in zip(frames, weights):
+            for index in range(len(frames)):
+                frame = frames[index]
+                weight = weights[index]
+                #print(x_initial[0, 0, 0], batch.x[0, 0, 0])
                 frame = torch.matmul(additional_rotation, frame)
                 frame = frame[None]
-                frame = frame.repeat(batch.x_initial.shape[0], 1, 1)
-                batch.x = torch.bmm(batch.x_initial, frame)
+                frame = frame.repeat(x_initial.shape[0], 1, 1)
+                batch.x = torch.bmm(x_initial, frame)
                 predictions_now = self.model_main(batch)
                 #print(predictions_now)
                 predictions_accumulated = predictions_accumulated + predictions_now * weight
-                weight_accumulated += weight
+                
+                num_handled += 1
+                if num_handled == BATCH_SIZE_SP:
+        
+                    result = predictions_accumulated / weight_accumulated
+                    result.backward()
+                    grads = x_initial.grad
+                    x_initial.grad = None
+                    yield result, grads, len(frames), weight_aux
+                    
+                    batch.x = x_initial
+                    frames, weights, weight_aux = self.get_all_frames(batch)
+                    
+                    weight_accumulated = 0.0
+                    for weight in weights:
+                        weight_accumulated = weight_accumulated + weight
+                    weight_accumulated = weight_accumulated * len(self.additional_rotations)
+                    weight_accumulated = weight_accumulated + weight_aux
+                    
+                    predictions_accumulated = 0.0
+                    num_handled = 0
                 
         if weight_aux > EPSILON:
-            weight_accumulated += weight_aux
-            predictions_accumulated += self.model_aux(batch) * weight_aux
-        
-        return predictions_accumulated / weight_accumulated, len(frames), weight_aux
-    
-    def get_targets(self, batch):
-        
-        batch.x_initial = batch.x.clone().detach()
-        batch.x_initial.requires_grad = True
-        batch.x = batch.x_initial
-        
-        self.task = 'energies'
-        predictions, n_frames, weight_aux = self(batch)
-        self.task = 'both'
-        if self.use_forces:
-            grads  = torch.autograd.grad(predictions, batch.x_initial, grad_outputs = torch.ones_like(predictions),
-                                    create_graph = True)[0]
-            neighbors_index = batch.neighbors_index.transpose(0, 1)
-            neighbors_pos = batch.neighbors_pos
-            grads_messaged = grads[neighbors_index, neighbors_pos]
-            grads[batch.mask] = 0.0
-            first = grads.sum(dim = 1)
-            grads_messaged[batch.mask] = 0.0
-            second = grads_messaged.sum(dim = 1)
-        
+            
+            batch.x = x_initial
+            predictions_accumulated = predictions_accumulated + self.model_aux(batch) * weight_aux
+            num_handled += 1
+            
+        if num_handled > 0:
+            
+            result = predictions_accumulated / weight_accumulated
+            
+            result.backward()
+            grads = x_initial.grad
+            x_initial.grad = None
+                    
+            yield result, grads, len(frames), weight_aux
+            
+    def forward(self, batch):
+        predictions_total, forces_predicted_total = 0.0, 0.0
+        for predictions, grads, n_frames, weight_aux in self.get_all_contributions(batch):
+            predictions_total += predictions
+            if self.use_forces:
+                neighbors_index = batch.neighbors_index.transpose(0, 1)
+                neighbors_pos = batch.neighbors_pos
+                grads_messaged = grads[neighbors_index, neighbors_pos]
+                grads[batch.mask] = 0.0
+                first = grads.sum(dim = 1)
+                grads_messaged[batch.mask] = 0.0
+                second = grads_messaged.sum(dim = 1)
+                forces_predicted = first - second
+                forces_predicted_total += forces_predicted
+                
         result = [n_frames, weight_aux]
         if self.use_energies:
-            result.append(predictions)
+            result.append(predictions_total)
             result.append(batch.y)
         else:
             result.append(None)
             result.append(None)
             
-        if  self.use_forces:
-            result.append(first - second)
+        if self.use_forces:
+            result.append(forces_predicted_total)
             result.append(batch.forces)
         else:
             result.append(None)
             result.append(None)
-            
+           
         return result
-    
+        
+ 
 
 sp_hypers = Hypers()
 sp_hypers.load_from_file(SP_HYPERS_PATH)
@@ -309,8 +361,8 @@ for weight in aux_weights:
         if weight > EPSILON:
             n_partially_aux += 1
             
-print("The number of structures handled completely by auxiliary model is: ", n_fully_aux, ';', n_fully_aux / len(aux_weights))
-print("The number of structures handled partially by auxiliary model is: ", n_partially_aux, ';', n_partially_aux / len(aux_weights))
+print("The number of structures handled completely by auxiliary model is: ", n_fully_aux, '; ratio is', n_fully_aux / len(aux_weights))
+print("The number of structures handled partially by auxiliary model is: ", n_partially_aux, '; ratio is', n_partially_aux / len(aux_weights))
 
 if USE_ENERGIES:
     compositional_features = get_compositional_features(structures, all_species)
