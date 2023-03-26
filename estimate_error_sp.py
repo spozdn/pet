@@ -62,6 +62,7 @@ DEFAULT_HYPERS_PATH = sys.argv[9]
 # The purpose of batch_size_sp is that pytorch graph is freed after handling batch_size_sp rotations from symmetrization protocol
 # So low batch_size_sp can help fit the calculation into the gpu memory
 BATCH_SIZE_SP = int(sys.argv[10])
+PATH_SAVE_PREDICTIONS = sys.argv[11]
 
 if (not USE_AUG) and (N_AUG is not None):
     raise ValueError("if additional augmentation is not used N_AUG should be None")
@@ -393,4 +394,11 @@ if USE_ENERGIES:
 if USE_FORCES:
     print(f"forces mae per component: {get_mae(forces_ground_truth, forces_predicted_mean)}")
     print(f"forces rmse per component: {get_rmse(forces_ground_truth, forces_predicted_mean)}")
+    
+    
+if (PATH_SAVE_PREDICTIONS != 'None') and (PATH_SAVE_PREDICTIONS != 'none'):
+    if USE_ENERGIES:
+        np.save(PATH_SAVE_PREDICTIONS + '/energies_predicted.npy', energies_predicted_mean)
+    if USE_FORCES:
+        np.save(PATH_SAVE_PREDICTIONS + '/forces_predicted.npy', forces_predicted_mean)
     
