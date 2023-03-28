@@ -22,7 +22,7 @@ import copy
 import inspect
 import yaml
 from torch_geometric.nn import DataParallel
-
+import random
 from molecule import Molecule, batch_to_dict
 from hypers import Hypers
 from pet import PET
@@ -37,11 +37,13 @@ CHECKPOINT = sys.argv[3]
 N_AUG = int(sys.argv[4])
 DEFAULT_HYPERS_PATH = sys.argv[5]
 BATCH_SIZE = sys.argv[6]
+PATH_SAVE_PREDICTIONS = sys.argv[7]
 
 HYPERS_PATH = PATH_TO_CALC_FOLDER + '/hypers_used.yaml'
 PATH_TO_MODEL_STATE_DICT = PATH_TO_CALC_FOLDER + '/' + CHECKPOINT + '_state_dict'
 ALL_SPECIES_PATH = PATH_TO_CALC_FOLDER + '/all_species.npy'
 SELF_CONTRIBUTIONS_PATH = PATH_TO_CALC_FOLDER + '/self_contributions.npy'
+
 
 
 '''STRUCTURES_PATH = 'small_data/test_small.xyz'
@@ -54,6 +56,13 @@ hypers = Hypers()
 # loading default values for the new hypers potentially added into the codebase after the calculation is done
 # assuming that the default values do not change the logic
 hypers.set_from_files(HYPERS_PATH, DEFAULT_HYPERS_PATH, check_dublicated = False)
+
+torch.manual_seed(hypers.RANDOM_SEED)
+np.random.seed(hypers.RANDOM_SEED)
+random.seed(hypers.RANDOM_SEED)
+os.environ['PYTHONHASHSEED'] = str(hypers.RANDOM_SEED)
+torch.cuda.manual_seed(hypers.RANDOM_SEED)
+torch.cuda.manual_seed_all(hypers.RANDOM_SEED)
 
 if BATCH_SIZE == 'None':
     BATCH_SIZE = hypers.STRUCTURAL_BATCH_SIZE
@@ -163,6 +172,13 @@ if hypers.USE_ENERGIES:
 if hypers.USE_FORCES:
     print(f"forces mae per component: {get_mae(forces_ground_truth, forces_predicted_mean)}")
     print(f"forces rmse per component: {get_rmse(forces_ground_truth, forces_predicted_mean)}")
+    
+    
+if (PATH_SAVE_PREDICTIONS != 'None') and (PATH_SAVE_PREDICTIONS != 'none'):
+    if USE_ENERGIES:
+        np.save(PATH_SAVE_PREDICTIONS + '/energies_predicted.npy', energies_predicted_mean)
+    if USE_FORCES:
+        np.save(PATH_SAVE_PREDICTIONS + '/forces_predicted.npy', forces_predicted_mean)
     
 
 
