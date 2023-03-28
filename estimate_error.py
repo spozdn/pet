@@ -175,9 +175,9 @@ if hypers.USE_FORCES:
     
     
 if (PATH_SAVE_PREDICTIONS != 'None') and (PATH_SAVE_PREDICTIONS != 'none'):
-    if USE_ENERGIES:
+    if hypers.USE_ENERGIES:
         np.save(PATH_SAVE_PREDICTIONS + '/energies_predicted.npy', energies_predicted_mean)
-    if USE_FORCES:
+    if hypers.USE_FORCES:
         np.save(PATH_SAVE_PREDICTIONS + '/forces_predicted.npy', forces_predicted_mean)
     
 
