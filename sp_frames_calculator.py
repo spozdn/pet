@@ -8,11 +8,11 @@ def smooth_max_weighted(values, weights, beta):
     denumenator = 0.0
     
     for value, weight in zip(values, weights):
-        
+        #print(value, beta, weight)
         denumenator += torch.exp(value * beta) * weight
         numenator += torch.exp(value * beta) * weight * value
         
-    
+    #print(denumenator)
     return numenator / denumenator
 
 def smooth_max(values, beta):
@@ -20,27 +20,80 @@ def smooth_max(values, beta):
     return smooth_max_weighted(values, weights, beta)
 
 
-def get_q_func(grid, w, delta):
+def q_func_exp(grid, w, delta, add_linear_multiplier):
+    values = torch.zeros_like(grid)
+    
+    mask_bigger = grid > w
+    values[mask_bigger] = torch.exp(-1.0 / ((grid[mask_bigger] - w) / delta))
+    
     mask_smaller = grid <= w
-    mask_bigger = grid >= w + delta
-    grid = (grid - w) / delta
-    f = 0.5 - torch.cos(np.pi * grid) / 2.0
-    f[mask_bigger] = 1.0
-    f[mask_smaller] = 0.0
-    return f
+    values[mask_smaller] = 0.0
+    
+    if add_linear_multiplier:
+        mask_active = grid >= w
+        values[mask_active] *= (grid[mask_active] - w)
+    return values
 
-def cutoff_func(grid, r_cut, delta):
+def cutoff_func_exp(grid, r_cut, delta):
+    values = torch.zeros_like(grid)
+    
+    mask_smaller = grid < r_cut
+    values[mask_smaller] = torch.exp(-1.0 / ((r_cut - grid[mask_smaller]) / delta))
     
     mask_bigger = grid >= r_cut
-    mask_smaller = grid <= r_cut - delta
-    grid = (grid - r_cut + delta) / delta
-    f = 1/2.0 + torch.cos(np.pi * grid)/2.0
-    
-    f[mask_bigger] = 0.0
-    f[mask_smaller] = 1.0
-      
-    return f
+    values[mask_bigger] = 0.0
+    return values
 
+def get_normalized_tanh_stitching(x):
+    return torch.tanh(1 / (x + 1) + 1/(x - 1))
+
+def cutoff_func_tanh(grid, r_cut, delta):
+    grid_normalized = 2.0 * (grid - (r_cut - 0.5 * delta)) / delta
+    mask_smaller = grid_normalized <= -1.0
+    mask_bigger = grid_normalized >= 1.0
+    mask_switch = torch.logical_and(grid_normalized > -1.0, grid_normalized < 1.0)
+    
+    values = torch.zeros_like(grid)
+    values[mask_smaller] = 1.0
+    values[mask_bigger] = 0.0
+    
+    
+    values[mask_switch] = 0.5 * get_normalized_tanh_stitching(grid_normalized[mask_switch]) + 0.5
+    return values
+
+
+def q_func_tanh(grid, w, delta, add_linear_multiplier):
+    grid_normalized =  2.0 * (grid - (w + 0.5 * delta)) / delta
+    
+    
+    mask_smaller = grid_normalized <= -1.0
+    mask_bigger = grid_normalized >= 1.0
+    mask_switch = torch.logical_and(grid_normalized > -1.0, grid_normalized < 1.0)
+    
+    values = torch.zeros_like(grid)
+    values[mask_smaller] = 0.0
+    values[mask_bigger] = 1.0
+
+    values[mask_switch] = 0.5 * get_normalized_tanh_stitching(-grid_normalized[mask_switch]) + 0.5
+    
+    if add_linear_multiplier:
+        mask_active = grid >= w
+        values[mask_active] *= (grid[mask_active] - w)
+    return values
+
+def q_func(grid, w, delta, sp_hypers):
+    if sp_hypers.Q_FUNC_MODE == 'exp':
+        return q_func_exp(grid, w, delta, sp_hypers.ADD_LINEAR_MULTIPLIER_Q_FUNC)
+    if sp_hypers.Q_FUNC_MODE == 'tanh':
+        return q_func_tanh(grid, w, delta, sp_hypers.ADD_LINEAR_MULTIPLIER_Q_FUNC)
+    raise ValueError("unknown mode for q func")
+    
+def cutoff_func(grid, r_cut, delta, sp_hypers):
+    if sp_hypers.CUTOFF_FUNC_MODE == 'exp':
+        return cutoff_func_exp(grid, r_cut, delta)
+    if sp_hypers.CUTOFF_FUNC_MODE == 'tanh':
+        return cutoff_func_tanh(grid, r_cut, delta)
+    raise ValueError('unknown mode for cutoff func')
 
 def get_length(vec):
     return torch.sqrt(torch.sum(vec ** 2))
@@ -76,7 +129,7 @@ class SPFramesCalculator():
         return self.lambert_constant / beta
     
     def get_r_cut_inner(self, env, r_cut_outer):
-        values, weights = [r_cut_outer], [1.0]
+        values, weights = [torch.tensor(r_cut_outer).to(env.device)], [1.0]
 
         for first_index in range(len(env)):
             for second_index in range(first_index + 1, len(env)):
@@ -85,26 +138,26 @@ class SPFramesCalculator():
 
                 first_length = get_length(first_vector)
                 second_length = get_length(second_vector)
+                if (first_length <= r_cut_outer) and (second_length <= r_cut_outer):
+                    value_now = smooth_max([first_length, second_length], self.sp_hypers.BETA)
+                    #print(value_now, self.T_func(self.sp_hypers.beta))
+                    value_now = value_now + self.T_func(self.sp_hypers.BETA)
 
-                value_now = smooth_max([first_length, second_length], self.sp_hypers.BETA)
-                #print(value_now, self.T_func(self.sp_hypers.beta))
-                value_now = value_now + self.T_func(self.sp_hypers.BETA)
+                    values.append(value_now)
 
-                values.append(value_now)
+                    first_weight_now = cutoff_func(first_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT, self.sp_hypers)[0]
+                    second_weight_now = cutoff_func(second_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT, self.sp_hypers)[0]
 
-                first_weight_now = cutoff_func(first_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT)[0]
-                second_weight_now = cutoff_func(second_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT)[0]
+                    first_normalized = get_normalized(first_vector)
+                    second_normalized = get_normalized(second_vector)
 
-                first_normalized = get_normalized(first_vector)
-                second_normalized = get_normalized(second_vector)
+                    vec_product = torch.cross(first_normalized, second_normalized)
+                    third_weight_now = q_func(torch.sum(vec_product ** 2)[None], self.sp_hypers.W, self.sp_hypers.DELTA_W, self.sp_hypers)[0]
 
-                vec_product = torch.cross(first_normalized, second_normalized)
-                third_weight_now = get_q_func(torch.sum(vec_product ** 2)[None], self.sp_hypers.W_R_CUT, self.sp_hypers.DELTA_R_CUT_W)[0]
-
-                weight_now = first_weight_now * second_weight_now * third_weight_now
-                weights.append(weight_now)
+                    weight_now = first_weight_now * second_weight_now * third_weight_now
+                    weights.append(weight_now)
         
-        return smooth_max_weighted(values, weights, -self.sp_hypers.BETA) #smooth_min with -beta
+        return smooth_max_weighted(values, weights, -self.sp_hypers.BETA) + self.sp_hypers.DELTA_R_CUT #smooth_min with -beta
     
     
     def get_all_frames(self, env, r_cut_outer):
@@ -125,12 +178,12 @@ class SPFramesCalculator():
 
                         vec_product = torch.cross(first_normalized, second_normalized)
                         spread = torch.sum(vec_product ** 2)
-                        if spread > self.sp_hypers.W_R_CUT:
+                        if spread > (self.sp_hypers.W - self.sp_hypers.DELTA_W):
                             coor_system = get_coor_system(first_vec, second_vec)
 
-                            first_weight = cutoff_func(first_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT)[0]
-                            second_weight = cutoff_func(second_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT)[0]
-                            third_weight = get_q_func(spread, self.sp_hypers.W_R_CUT, self.sp_hypers.DELTA_R_CUT_W)
+                            first_weight = cutoff_func(first_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT, self.sp_hypers)[0]
+                            second_weight = cutoff_func(second_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT, self.sp_hypers)[0]
+                            third_weight = q_func(spread, (self.sp_hypers.W - self.sp_hypers.DELTA_W), self.sp_hypers.DELTA_W, self.sp_hypers)
 
                             weight = first_weight * second_weight * third_weight
 
@@ -141,7 +194,8 @@ class SPFramesCalculator():
     
     
     
-    def get_all_frames_global(self, envs_list, r_cut_outer, epsilon = 1e-10):
+    def get_all_frames_global(self, envs_list, r_cut_initial, epsilon = 1e-10):
+        r_cut_outer = min(r_cut_initial, self.sp_hypers.R_CUT_OUTER_UPPER_BOUND)
         coor_systems, weights = [], []
         for env in envs_list:
             coor_systems_now, weights_now = self.get_all_frames(env, r_cut_outer)
@@ -153,11 +207,16 @@ class SPFramesCalculator():
                 weights.append(el)
         
         if len(weights) == 0:
-            return [], [], torch.tensor(1.0, dtype = torch.float32).to(envs_list[0].device)
+            zero_torch = torch.tensor(0.0, dtype = torch.float32).to(envs_list[0].device)
+            return [], [], cutoff_func(zero_torch[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers)[0]
+        
+        weights = torch.cat([weight[None] for weight in weights])
+        max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA)
+        
+        weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers)[0]
         
         
-        max_weight = smooth_max(weights, self.sp_hypers.BETA)
-        factors = get_q_func(torch.cat([weight[None] for weight in weights]), max_weight * self.sp_hypers.PRUNNING_THRESHOLD, max_weight * self.sp_hypers.PRUNNING_THRESHOLD_DELTA)
+        factors = q_func(weights, max_weight * self.sp_hypers.PRUNNING_THRESHOLD, max_weight * self.sp_hypers.PRUNNING_THRESHOLD_DELTA, self.sp_hypers)
         #print(factors)
         #print(max_weight)
         coor_systems_final, weights_final = [], []
@@ -167,8 +226,9 @@ class SPFramesCalculator():
                 weights_final.append(now)
                 coor_systems_final.append(coor_systems[i])
         
-        weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA)[0]
-        #print(max_weight, weight_aux)
+        
+        
+        #print('in sp frame calculator: ', max_weight, weight_aux)
         return coor_systems_final, weights_final, weight_aux
     
     

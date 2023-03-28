@@ -75,6 +75,8 @@ class PETSP(torch.nn.Module):
         weight_accumulated = 0.0
         for weight in weights:
             weight_accumulated = weight_accumulated + weight
+            
+        total_main_weight = weight_accumulated
         weight_accumulated = weight_accumulated * len(self.additional_rotations)
         weight_accumulated = weight_accumulated + weight_aux
         
@@ -101,7 +103,7 @@ class PETSP(torch.nn.Module):
                     result.backward()
                     grads = x_initial.grad
                     x_initial.grad = None
-                    yield result, grads, len(frames), weight_aux
+                    yield result, grads, len(frames), weight_aux, total_main_weight
                     
                     batch.x = x_initial
                     frames, weights, weight_aux = self.get_all_frames(batch)
@@ -129,12 +131,12 @@ class PETSP(torch.nn.Module):
             grads = x_initial.grad
             x_initial.grad = None
                     
-            yield result, grads, len(frames), weight_aux
+            yield result, grads, len(frames), weight_aux, total_main_weight
             
     def forward(self, batch):
         predictions_total, forces_predicted_total = 0.0, 0.0
         n_frames = None
-        for predictions, grads, n_frames, weight_aux in self.get_all_contributions(batch):
+        for predictions, grads, n_frames, weight_aux, total_main_weight in self.get_all_contributions(batch):
             predictions_total += predictions
             if self.use_forces:
                 neighbors_index = batch.neighbors_index.transpose(0, 1)
@@ -149,7 +151,8 @@ class PETSP(torch.nn.Module):
             
         if n_frames is None:
             raise ValueError("all collinear problem happened, but aux model was not provided")
-        result = [n_frames, weight_aux]
+        
+        result = [n_frames, weight_aux, total_main_weight]
         if self.use_energies:
             result.append(predictions_total)
             result.append(batch.y)

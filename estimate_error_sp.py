@@ -204,12 +204,14 @@ if USE_FORCES:
 
 #print("len loader: ", len(loader), len(molecules))
 
-n_frames_used, aux_weights = [], []
+n_frames_used, aux_weights, total_main_weights  = [], [], []
 for batch in tqdm(loader):
     #print(batch)
     batch.cuda()
-    n_frames, aux_weight, predictions_energies, targets_energies, predictions_forces, targets_forces = model_sp(batch)
+    #with torch.autograd.set_detect_anomaly(True):
+    n_frames, aux_weight, total_main_weight, predictions_energies, targets_energies, predictions_forces, targets_forces = model_sp(batch)
     n_frames_used.append(n_frames)
+    total_main_weights.append(total_main_weight)
     aux_weights.append(float(aux_weight.data.cpu().numpy()))
     if USE_ENERGIES:
         energies_predicted.append(predictions_energies.data.cpu().numpy())
@@ -240,11 +242,13 @@ print("Average number of active coordinate systems: ", np.mean(n_frames_used))
 print("aux_weights: ", aux_weights)
 n_fully_aux, n_partially_aux = 0, 0
 for weight in aux_weights:
-    if np.abs(weight - 1.0) < EPSILON:
+    if weight > EPSILON:
+        n_partially_aux += 1
+        
+#print(total_main_weights)
+for weight in total_main_weights:
+    if weight < EPSILON:
         n_fully_aux += 1
-    else:
-        if weight > EPSILON:
-            n_partially_aux += 1
             
 print("The number of structures handled completely by auxiliary model is: ", n_fully_aux, '; ratio is', n_fully_aux / len(aux_weights))
 print("The number of structures handled partially by auxiliary model is: ", n_partially_aux, '; ratio is', n_partially_aux / len(aux_weights))
