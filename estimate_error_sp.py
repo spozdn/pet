@@ -239,7 +239,7 @@ if USE_FORCES:
 
     
 print("Average number of active coordinate systems: ", np.mean(n_frames_used))
-print("aux_weights: ", aux_weights)
+#print("aux_weights: ", aux_weights)
 n_fully_aux, n_partially_aux = 0, 0
 for weight in aux_weights:
     if weight > EPSILON:
@@ -250,8 +250,8 @@ for weight in total_main_weights:
     if weight < EPSILON:
         n_fully_aux += 1
             
-print("The number of structures handled completely by auxiliary model is: ", n_fully_aux, '; ratio is', n_fully_aux / len(aux_weights))
-print("The number of structures handled partially by auxiliary model is: ", n_partially_aux, '; ratio is', n_partially_aux / len(aux_weights))
+#print("The number of structures handled completely by auxiliary model is: ", n_fully_aux, '; ratio is', n_fully_aux / len(aux_weights))
+print(f"Auxiliary model was active for {n_partially_aux}/{len(aux_weights)} structures ")
 
 if USE_ENERGIES:
     compositional_features = get_compositional_features(structures, all_species)

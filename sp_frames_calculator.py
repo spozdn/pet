@@ -211,7 +211,7 @@ class SPFramesCalculator():
             return [], [], cutoff_func(zero_torch[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers)[0]
         
         weights = torch.cat([weight[None] for weight in weights])
-        max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA)
+        max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA_WEIGHTS)
         
         weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers)[0]
         
@@ -227,7 +227,10 @@ class SPFramesCalculator():
                 coor_systems_final.append(coor_systems[i])
         
         
+        #print(len(weights), len(weights_final), max_weight, torch.max(weights))
         
+        #for_printing = [weight.data.cpu().numpy() for weight in weights_final]
+        #print(np.sort(for_printing) * 100)
         #print('in sp frame calculator: ', max_weight, weight_aux)
         return coor_systems_final, weights_final, weight_aux
     
