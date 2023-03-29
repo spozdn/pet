@@ -88,7 +88,7 @@ class PETSP(torch.nn.Module):
                 frame = frames[index]
                 weight = weights[index]
                 #print(x_initial[0, 0, 0], batch.x[0, 0, 0])
-                frame = torch.matmul(additional_rotation, frame)
+                frame = torch.matmul(frame, additional_rotation)
                 frame = frame[None]
                 frame = frame.repeat(x_initial.shape[0], 1, 1)
                 batch.x = torch.bmm(x_initial, frame)
