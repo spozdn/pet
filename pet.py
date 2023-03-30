@@ -153,7 +153,7 @@ class CartesianTransformer(torch.nn.Module):
                     self.central_scalar_embedding = nn.Sequential(nn.Linear(hypers.SCALAR_ATTRIBUTES_SIZE, d_model),
                                                                   get_activation(hypers))
                 else:
-                    self.central_scalar_embedding = nn.Linear(Hypers.SCALAR_ATTRIBUTES_SIZE, d_model)
+                    self.central_scalar_embedding = nn.Linear(hypers.SCALAR_ATTRIBUTES_SIZE, d_model)
                 
                 if hypers.COMPRESS_MODE == 'linear':
                     self.central_compress = nn.Linear(2 * d_model, d_model)

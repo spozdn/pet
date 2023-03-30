@@ -35,8 +35,9 @@ from sp_frames_calculator import SPFramesCalculator
 
 
 class PETSP(torch.nn.Module):
-    def __init__(self, model_main, model_aux, r_cut, use_energies, use_forces, sp_frames_calculator, batch_size_sp, additional_rotations = None, epsilon = 1e-10):
+    def __init__(self, model_main, model_aux, r_cut, use_energies, use_forces, sp_frames_calculator, batch_size_sp, additional_rotations = None, epsilon = 1e-10, show_progress = False):
         super(PETSP, self).__init__()
+        self.show_progress = show_progress
         self.r_cut = r_cut
         self.use_energies = use_energies
         self.use_forces = use_forces
@@ -71,6 +72,8 @@ class PETSP(torch.nn.Module):
         batch.x = x_initial
         frames, weights, weight_aux = self.get_all_frames(batch)
         
+        if self.show_progress:
+            print("number of frames now: ", len(frames))
         weight_accumulated = 0.0
         for weight in weights:
             weight_accumulated = weight_accumulated + weight
@@ -135,7 +138,7 @@ class PETSP(torch.nn.Module):
     def forward(self, batch):
         predictions_total, forces_predicted_total = 0.0, 0.0
         n_frames = None
-        for predictions, grads, n_frames, weight_aux, total_main_weight in self.get_all_contributions(batch):
+        for predictions, grads, n_frames, weight_aux, total_main_weight in tqdm(self.get_all_contributions(batch), disable = not self.show_progress):
             predictions_total += predictions
             if self.use_forces:
                 neighbors_index = batch.neighbors_index.transpose(0, 1)

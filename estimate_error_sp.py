@@ -63,7 +63,7 @@ DEFAULT_HYPERS_PATH = sys.argv[9]
 # So low batch_size_sp can help fit the calculation into the gpu memory
 BATCH_SIZE_SP = int(sys.argv[10])
 PATH_SAVE_PREDICTIONS = sys.argv[11]
-
+SHOW_PROGRESS = bool_map[sys.argv[12]]
 
 if (not USE_AUG) and (N_AUG is not None):
     raise ValueError("if additional augmentation is not used N_AUG should be None")
@@ -198,7 +198,7 @@ if USE_AUG:
 else:
     additional_rotations = None
     
-model_sp = PETSP(model_main, model_aux, R_CUT, USE_ENERGIES, USE_FORCES, sp_frames_calculator, BATCH_SIZE_SP, additional_rotations = additional_rotations, epsilon = EPSILON).cuda()
+model_sp = PETSP(model_main, model_aux, R_CUT, USE_ENERGIES, USE_FORCES, sp_frames_calculator, BATCH_SIZE_SP, additional_rotations = additional_rotations, epsilon = EPSILON, show_progress = SHOW_PROGRESS).cuda()
 
 if USE_ENERGIES:
     all_energies_predicted = []
