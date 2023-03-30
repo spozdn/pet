@@ -62,8 +62,7 @@ class PETSP(torch.nn.Module):
             env_now = batch.x[env_index][mask_now]
             all_envs.append(env_now)
             
-        r_cut = torch.tensor(self.r_cut, device = batch.x.device)
-        return self.sp_frames_calculator.get_all_frames_global(all_envs, r_cut)
+        return self.sp_frames_calculator.get_all_frames_global(all_envs, self.r_cut)
     
     def get_all_contributions(self, batch):
         x_initial = batch.x
