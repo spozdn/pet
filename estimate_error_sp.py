@@ -64,6 +64,7 @@ DEFAULT_HYPERS_PATH = sys.argv[9]
 BATCH_SIZE_SP = int(sys.argv[10])
 PATH_SAVE_PREDICTIONS = sys.argv[11]
 
+
 if (not USE_AUG) and (N_AUG is not None):
     raise ValueError("if additional augmentation is not used N_AUG should be None")
 if USE_AUG and (N_AUG is None):
@@ -84,6 +85,8 @@ def load_model(path_to_calc_folder, checkpoint):
     all_species = np.load(all_species_path)
     if hypers.USE_ENERGIES:
         self_contributions = np.load(self_contributions_path)
+    else:
+        self_contributions = None
     
     add_tokens = []
     for _ in range(hypers.N_GNN_LAYERS - 1):
@@ -129,6 +132,10 @@ if PATH_TO_CALC_FOLDER_AUX == 'None' or PATH_TO_CALC_FOLDER_AUX == 'none':
     USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA = hypers_main.USE_ADDITIONAL_SCALAR_ATTRIBUTES 
     USE_FORCES = hypers_main.USE_FORCES
     USE_ENERGIES = hypers_main.USE_ENERGIES
+    
+    if hypers_main.MULTI_GPU:
+        print("using only 1 gpu, multigpu for sp is not implemented")
+        
 else:
     model_aux, hypers_aux, all_species_aux, self_contributions_aux = load_model(PATH_TO_CALC_FOLDER_AUX, CHECKPOINT_AUX)
 
@@ -149,6 +156,9 @@ else:
 
     USE_FORCES = hypers_main.USE_FORCES and hypers_aux.USE_FORCES
     USE_ENERGIES = hypers_main.USE_ENERGIES and hypers_aux.USE_ENERGIES
+    
+    if hypers_main.MULTI_GPU or hypers_aux.MULTI_GPU:
+        print("using only 1 gpu, multigpu for sp is not implemented")
 
         
 R_CUT = hypers_main.R_CUT
@@ -165,8 +175,7 @@ max_nums = [molecule.get_max_num() for molecule in molecules]
 max_num = np.max(max_nums)
 graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)]
 
-if hypers_main.MULTI_GPU or hypers_aux.MULTI_GPU:
-    print("using only 1 gpu, multigpu for sp is not implemented")
+
        
 loader = DataLoader(graphs, 1, shuffle=False)
 
