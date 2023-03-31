@@ -35,7 +35,7 @@ STRUCTURES_PATH = sys.argv[1]
 HYPERS_PATH = sys.argv[2]
 PATH_TO_MODEL_STATE_DICT = sys.argv[3]
 ALL_SPECIES_PATH = sys.argv[4]
-N_AUG = int(sys.argv[6])
+N_AUG = int(sys.argv[5])
 
 '''STRUCTURES_PATH = 'small_data/test_small.xyz'
 HYPERS_PATH = 'results/test_calc_continuation_0/hypers_used.yaml'
