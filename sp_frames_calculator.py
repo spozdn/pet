@@ -1,6 +1,8 @@
 from scipy.special import lambertw
 import torch
 import numpy as np
+import sys
+
 
 def smooth_max_weighted(values, weights, beta):
    
@@ -31,7 +33,7 @@ def q_func_exp(grid, w, delta, add_linear_multiplier):
     
     if add_linear_multiplier:
         mask_active = grid >= w
-        values[mask_active] *= (grid[mask_active] - w)
+        values[mask_active] *= (grid[mask_active] - w) / delta
     return values
 
 def cutoff_func_exp(grid, r_cut, delta):
@@ -81,17 +83,17 @@ def q_func_tanh(grid, w, delta, add_linear_multiplier):
         values[mask_active] *= (grid[mask_active] - w)
     return values
 
-def q_func(grid, w, delta, sp_hypers):
-    if sp_hypers.Q_FUNC_MODE == 'exp':
-        return q_func_exp(grid, w, delta, sp_hypers.ADD_LINEAR_MULTIPLIER_Q_FUNC)
-    if sp_hypers.Q_FUNC_MODE == 'tanh':
-        return q_func_tanh(grid, w, delta, sp_hypers.ADD_LINEAR_MULTIPLIER_Q_FUNC)
+def q_func(grid, w, delta, q_func_mode, add_linear_multiplier):
+    if q_func_mode == 'exp':
+        return q_func_exp(grid, w, delta, add_linear_multiplier)
+    if q_func_mode == 'tanh':
+        return q_func_tanh(grid, w, delta, add_linear_multiplier)
     raise ValueError("unknown mode for q func")
     
-def cutoff_func(grid, r_cut, delta, sp_hypers):
-    if sp_hypers.CUTOFF_FUNC_MODE == 'exp':
+def cutoff_func(grid, r_cut, delta, cutoff_func_mode):
+    if cutoff_func_mode == 'exp':
         return cutoff_func_exp(grid, r_cut, delta)
-    if sp_hypers.CUTOFF_FUNC_MODE == 'tanh':
+    if cutoff_func_mode == 'tanh':
         return cutoff_func_tanh(grid, r_cut, delta)
     raise ValueError('unknown mode for cutoff func')
 
@@ -145,14 +147,14 @@ class SPFramesCalculator():
 
                     values.append(value_now)
 
-                    first_weight_now = cutoff_func(first_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT, self.sp_hypers)[0]
-                    second_weight_now = cutoff_func(second_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT, self.sp_hypers)[0]
+                    first_weight_now = cutoff_func(first_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
+                    second_weight_now = cutoff_func(second_length[None], r_cut_outer, self.sp_hypers.DELTA_R_CUT, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
 
                     first_normalized = get_normalized(first_vector)
                     second_normalized = get_normalized(second_vector)
 
                     vec_product = torch.cross(first_normalized, second_normalized)
-                    third_weight_now = q_func(torch.sum(vec_product ** 2)[None], self.sp_hypers.W, self.sp_hypers.DELTA_W, self.sp_hypers)[0]
+                    third_weight_now = q_func(torch.sum(vec_product ** 2)[None], self.sp_hypers.W, self.sp_hypers.DELTA_W, self.sp_hypers.Q_FUNC_MODE, False)[0]
 
                     weight_now = first_weight_now * second_weight_now * third_weight_now
                     weights.append(weight_now)
@@ -181,9 +183,9 @@ class SPFramesCalculator():
                         if spread > (self.sp_hypers.W - self.sp_hypers.DELTA_W):
                             coor_system = get_coor_system(first_vec, second_vec)
 
-                            first_weight = cutoff_func(first_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT, self.sp_hypers)[0]
-                            second_weight = cutoff_func(second_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT, self.sp_hypers)[0]
-                            third_weight = q_func(spread, (self.sp_hypers.W - self.sp_hypers.DELTA_W), self.sp_hypers.DELTA_W, self.sp_hypers)
+                            first_weight = cutoff_func(first_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
+                            second_weight = cutoff_func(second_length[None], r_cut_inner, self.sp_hypers.DELTA_R_CUT, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
+                            third_weight = q_func(spread, (self.sp_hypers.W - self.sp_hypers.DELTA_W), self.sp_hypers.DELTA_W, self.sp_hypers.Q_FUNC_MODE, self.sp_hypers.ADD_LINEAR_MULTIPLIER_Q_FUNC)
 
                             weight = first_weight * second_weight * third_weight
 
@@ -208,30 +210,32 @@ class SPFramesCalculator():
         
         if len(weights) == 0:
             zero_torch = torch.tensor(0.0, dtype = torch.float32).to(envs_list[0].device)
-            return [], [], cutoff_func(zero_torch[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers)[0]
-        
-        weights = torch.cat([weight[None] for weight in weights])
-        max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA_WEIGHTS)
-        
-        weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers)[0]
+            return [], [], cutoff_func(zero_torch[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
         
         
-        factors = q_func(weights, max_weight * self.sp_hypers.PRUNNING_THRESHOLD, max_weight * self.sp_hypers.PRUNNING_THRESHOLD_DELTA, self.sp_hypers)
-        #print(factors)
-        #print(max_weight)
-        coor_systems_final, weights_final = [], []
-        for i in range(len(weights)):
-            now = weights[i] * factors[i]
-            if now > epsilon:
-                weights_final.append(now)
-                coor_systems_final.append(coor_systems[i])
+        for _ in range(self.sp_hypers.NUM_PRUNNINGS):
+            weights = torch.cat([weight[None] for weight in weights])
+            max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA_WEIGHTS)
+
+            factors = q_func(weights, max_weight * self.sp_hypers.PRUNNING_THRESHOLD, max_weight * self.sp_hypers.PRUNNING_THRESHOLD_DELTA, self.sp_hypers.Q_FUNC_MODE, False)
+            #print(factors)
+            #print(max_weight)
+            coor_systems_final, weights_final = [], []
+            for i in range(len(weights)):
+                now = weights[i] * factors[i]
+                if now > epsilon:
+                    weights_final.append(now)
+                    coor_systems_final.append(coor_systems[i])
+            weights = weights_final
+            coor_systems = coor_systems_final
         
+        weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
         
         #print(len(weights), len(weights_final), max_weight, torch.max(weights))
-        
+        #np.set_printoptions(threshold=sys.maxsize)
         #for_printing = [weight.data.cpu().numpy() for weight in weights_final]
-        #print(np.sort(for_printing) * 100)
+        #print(np.sort(for_printing[:]) * 100)
         #print('in sp frame calculator: ', max_weight, weight_aux)
-        return coor_systems_final, weights_final, weight_aux
+        return coor_systems, weights, weight_aux
     
     

@@ -35,13 +35,14 @@ from sp_frames_calculator import SPFramesCalculator
 
 
 class PETSP(torch.nn.Module):
-    def __init__(self, model_main, model_aux, r_cut, use_energies, use_forces, sp_frames_calculator, batch_size_sp, additional_rotations = None, epsilon = 1e-10, show_progress = False):
+    def __init__(self, model_main, model_aux, r_cut, use_energies, use_forces, sp_frames_calculator, batch_size_sp, additional_rotations = None, epsilon = 1e-10, show_progress = False, max_num = None):
         super(PETSP, self).__init__()
         self.show_progress = show_progress
         self.r_cut = r_cut
         self.use_energies = use_energies
         self.use_forces = use_forces
         
+        self.max_num = max_num
         self.model_main = model_main
         self.model_aux = model_aux
         self.model_main.task = 'energies'
@@ -71,7 +72,10 @@ class PETSP(torch.nn.Module):
         
         batch.x = x_initial
         frames, weights, weight_aux = self.get_all_frames(batch)
-        
+        if self.max_num is not None:
+            if len(frames) > self.max_num:
+                raise ValueError("number of frames is bigger than the upper bound provided")
+                
         if self.show_progress:
             print("number of frames now: ", len(frames))
         weight_accumulated = 0.0
