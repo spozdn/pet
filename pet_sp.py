@@ -74,7 +74,7 @@ class PETSP(torch.nn.Module):
         frames, weights, weight_aux = self.get_all_frames(batch)
         if self.max_num is not None:
             if len(frames) > self.max_num:
-                raise ValueError("number of frames is bigger than the upper bound provided")
+                raise ValueError(f"number of frames ({len(frames)}) is bigger than the upper bound provided")
                 
         if self.show_progress:
             print("number of frames now: ", len(frames))
