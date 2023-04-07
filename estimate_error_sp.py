@@ -68,7 +68,7 @@ MAX_NUM = sys.argv[12]
 if MAX_NUM == 'None' or MAX_NUM == 'none':
     MAX_NUM = None
 else:
-    MAX_NUM = int(sys.argv[13])
+    MAX_NUM = int(sys.argv[12])
     
 def load_model(path_to_calc_folder, checkpoint):
     hypers_path = path_to_calc_folder + '/hypers_used.yaml'
