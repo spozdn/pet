@@ -46,35 +46,29 @@ CHECKPOINT_AUX = sys.argv[5]
 
 
 bool_map = {'True' : True, 'False' : False}
-USE_AUG = bool_map[sys.argv[6]]
 
-N_AUG = sys.argv[7]
+N_AUG = sys.argv[6]
 if N_AUG == 'None' or N_AUG == 'none':
     N_AUG = None
 else:
-    N_AUG = int(sys.argv[7])
+    N_AUG = int(sys.argv[6])
 
-SP_HYPERS_PATH = sys.argv[8]
-DEFAULT_HYPERS_PATH = sys.argv[9]
+SP_HYPERS_PATH = sys.argv[7]
+DEFAULT_HYPERS_PATH = sys.argv[8]
 
 # Only one rotation of only one configuration is supplied to a model at the same time.
 # So huge batch size sp would not speed up the calculation
 # The purpose of batch_size_sp is that pytorch graph is freed after handling batch_size_sp rotations from symmetrization protocol
 # So low batch_size_sp can help fit the calculation into the gpu memory
-BATCH_SIZE_SP = int(sys.argv[10])
-PATH_SAVE_PREDICTIONS = sys.argv[11]
-SHOW_PROGRESS = bool_map[sys.argv[12]]
-MAX_NUM = sys.argv[13]
+BATCH_SIZE_SP = int(sys.argv[9])
+PATH_SAVE_PREDICTIONS = sys.argv[10]
+SHOW_PROGRESS = bool_map[sys.argv[11]]
+MAX_NUM = sys.argv[12]
 
 if MAX_NUM == 'None' or MAX_NUM == 'none':
     MAX_NUM = None
 else:
     MAX_NUM = int(sys.argv[13])
-
-if (not USE_AUG) and (N_AUG is not None):
-    raise ValueError("if additional augmentation is not used N_AUG should be None")
-if USE_AUG and (N_AUG is None):
-    raise ValueError("if additional augmentation is used N_AUG should be provided")
     
 def load_model(path_to_calc_folder, checkpoint):
     hypers_path = path_to_calc_folder + '/hypers_used.yaml'
@@ -199,12 +193,11 @@ sp_hypers = Hypers()
 sp_hypers.load_from_file(SP_HYPERS_PATH)
 sp_frames_calculator = SPFramesCalculator(sp_hypers)
 
-if USE_AUG:
-    additional_rotations = [torch.FloatTensor(el) for el in Rotation.random(N_AUG).as_matrix()]
-else:
-    additional_rotations = None
+
     
-model_sp = PETSP(model_main, model_aux, R_CUT, USE_ENERGIES, USE_FORCES, sp_frames_calculator, BATCH_SIZE_SP, additional_rotations = additional_rotations, epsilon = EPSILON, show_progress = SHOW_PROGRESS, max_num = MAX_NUM).cuda()
+model_sp = PETSP(model_main, model_aux, R_CUT, USE_ENERGIES, USE_FORCES, sp_frames_calculator, BATCH_SIZE_SP, 
+                 epsilon = EPSILON, show_progress = SHOW_PROGRESS, max_num = MAX_NUM,
+                n_aug = N_AUG).cuda()
 
 if USE_ENERGIES:
     all_energies_predicted = []

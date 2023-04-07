@@ -35,12 +35,14 @@ from sp_frames_calculator import SPFramesCalculator
 
 
 class PETSP(torch.nn.Module):
-    def __init__(self, model_main, model_aux, r_cut, use_energies, use_forces, sp_frames_calculator, batch_size_sp, additional_rotations = None, epsilon = 1e-10, show_progress = False, max_num = None):
+    def __init__(self, model_main, model_aux, r_cut, use_energies, use_forces, sp_frames_calculator, batch_size_sp,
+                 epsilon = 1e-10, show_progress = False, max_num = None, n_aug = None):
         super(PETSP, self).__init__()
         self.show_progress = show_progress
         self.r_cut = r_cut
         self.use_energies = use_energies
         self.use_forces = use_forces
+        self.n_aug = n_aug
         
         self.max_num = max_num
         self.model_main = model_main
@@ -52,10 +54,8 @@ class PETSP(torch.nn.Module):
         
         self.sp_frames_calculator = sp_frames_calculator
         self.batch_size_sp = batch_size_sp
-        self.additional_rotations = additional_rotations
+        
         self.epsilon = epsilon
-        if self.additional_rotations is None:
-            self.additional_rotations = [torch.eye(3)]
         
     def get_all_frames(self, batch):
         all_envs = []
@@ -66,7 +66,7 @@ class PETSP(torch.nn.Module):
             
         return self.sp_frames_calculator.get_all_frames_global(all_envs, self.r_cut)
     
-    def get_all_contributions(self, batch):
+    def get_all_contributions(self, batch, additional_rotations):
         x_initial = batch.x
         x_initial.requires_grad = True
         
@@ -83,12 +83,12 @@ class PETSP(torch.nn.Module):
             weight_accumulated = weight_accumulated + weight
             
         total_main_weight = weight_accumulated
-        weight_accumulated = weight_accumulated * len(self.additional_rotations)
+        weight_accumulated = weight_accumulated * len(additional_rotations)
         weight_accumulated = weight_accumulated + weight_aux
         
         predictions_accumulated = 0.0
         num_handled = 0
-        for additional_rotation in self.additional_rotations:
+        for additional_rotation in additional_rotations:
             additional_rotation = additional_rotation.to(batch.x.device)
             for index in range(len(frames)):
                 frame = frames[index]
@@ -117,7 +117,7 @@ class PETSP(torch.nn.Module):
                     weight_accumulated = 0.0
                     for weight in weights:
                         weight_accumulated = weight_accumulated + weight
-                    weight_accumulated = weight_accumulated * len(self.additional_rotations)
+                    weight_accumulated = weight_accumulated * len(additional_rotations)
                     weight_accumulated = weight_accumulated + weight_aux
                     
                     predictions_accumulated = 0.0
@@ -140,9 +140,14 @@ class PETSP(torch.nn.Module):
             yield result, grads, len(frames), weight_aux, total_main_weight
             
     def forward(self, batch):
+        if self.n_aug is None:
+            additional_rotations = [torch.eye(3)]
+        else:
+            additional_rotations = [torch.FloatTensor(el) for el in Rotation.random(self.n_aug).as_matrix()]
+            
         predictions_total, forces_predicted_total = 0.0, 0.0
         n_frames = None
-        for predictions, grads, n_frames, weight_aux, total_main_weight in tqdm(self.get_all_contributions(batch), disable = not self.show_progress):
+        for predictions, grads, n_frames, weight_aux, total_main_weight in tqdm(self.get_all_contributions(batch, additional_rotations), disable = not self.show_progress):
             predictions_total += predictions
             if self.use_forces:
                 neighbors_index = batch.neighbors_index.transpose(0, 1)
