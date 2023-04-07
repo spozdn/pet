@@ -229,6 +229,9 @@ class SPFramesCalculator():
             weights = weights_final
             coor_systems = coor_systems_final
         
+        weights = torch.cat([weight[None] for weight in weights])
+        max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA_WEIGHTS)
+        
         weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
         
         #print(len(weights), len(weights_final), max_weight, torch.max(weights))
