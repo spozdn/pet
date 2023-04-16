@@ -212,6 +212,9 @@ class SPFramesCalculator():
             zero_torch = torch.tensor(0.0, dtype = torch.float32).to(envs_list[0].device)
             return [], [], cutoff_func(zero_torch[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
         
+        max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA_WEIGHTS)
+        
+        weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
         
         for _ in range(self.sp_hypers.NUM_PRUNNINGS):
             weights = torch.cat([weight[None] for weight in weights])
@@ -230,9 +233,7 @@ class SPFramesCalculator():
             coor_systems = coor_systems_final
         
         weights = torch.cat([weight[None] for weight in weights])
-        max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA_WEIGHTS)
         
-        weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
         
         #print(len(weights), len(weights_final), max_weight, torch.max(weights))
         #np.set_printoptions(threshold=sys.maxsize)
