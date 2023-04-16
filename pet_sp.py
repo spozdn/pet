@@ -84,7 +84,8 @@ class PETSP(torch.nn.Module):
             
         total_main_weight = weight_accumulated
         weight_accumulated = weight_accumulated * len(additional_rotations)
-        weight_accumulated = weight_accumulated + weight_aux
+        if self.model_aux is not None:
+            weight_accumulated = weight_accumulated + weight_aux
         
         predictions_accumulated = 0.0
         num_handled = 0
@@ -118,7 +119,8 @@ class PETSP(torch.nn.Module):
                     for weight in weights:
                         weight_accumulated = weight_accumulated + weight
                     weight_accumulated = weight_accumulated * len(additional_rotations)
-                    weight_accumulated = weight_accumulated + weight_aux
+                    if self.model_aux is not None:
+                        weight_accumulated = weight_accumulated + weight_aux
                     
                     predictions_accumulated = 0.0
                     num_handled = 0
