@@ -80,7 +80,7 @@ def q_func_tanh(grid, w, delta, add_linear_multiplier):
     
     if add_linear_multiplier:
         mask_active = grid >= w
-        values[mask_active] *= (grid[mask_active] - w)
+        values[mask_active] *= (grid[mask_active] - w) / delta
     return values
 
 def q_func(grid, w, delta, q_func_mode, add_linear_multiplier):
@@ -195,6 +195,23 @@ class SPFramesCalculator():
         return coor_systems, weights
     
     
+    def filter_zero_weights(self, weights, coor_systems, epsilon = 1e-10):
+        weights_final, coor_systems_final = [], []
+        for i in range(len(weights)):
+            if weights[i] > epsilon:
+                weights_final.append(weights[i])
+                coor_systems_final.append(coor_systems[i])
+        
+        return weights_final, coor_systems_final
+        
+        
+    def get_prunning_factors(self, weights):
+        weights = torch.cat([weight[None] for weight in weights])
+        max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA_WEIGHTS)
+
+        factors = q_func(weights, max_weight * self.sp_hypers.PRUNNING_THRESHOLD, max_weight * self.sp_hypers.PRUNNING_THRESHOLD_DELTA, self.sp_hypers.Q_FUNC_MODE, False)
+        
+        return factors
     
     def get_all_frames_global(self, envs_list, r_cut_initial, epsilon = 1e-10):
         r_cut_outer = min(r_cut_initial, self.sp_hypers.R_CUT_OUTER_UPPER_BOUND)
@@ -208,6 +225,8 @@ class SPFramesCalculator():
             for el in weights_now:
                 weights.append(el)
         
+        weights, coor_systems = self.filter_zero_weights(weights, coor_systems, epsilon = epsilon)
+        
         if len(weights) == 0:
             zero_torch = torch.tensor(0.0, dtype = torch.float32).to(envs_list[0].device)
             return [], [], cutoff_func(zero_torch[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
@@ -216,21 +235,18 @@ class SPFramesCalculator():
         
         weight_aux = cutoff_func(max_weight[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
         
+        prunning_turn_on = cutoff_func(max_weight[None], self.sp_hypers.PRUNNING_TURN_ON_THRESHOLD, 
+                                       self.sp_hypers.PRUNNING_TURN_ON_THRESHOLD_DELTA, 'tanh')[0]
+        
+        #print('smooth max: ',  max_weight)
+        #print('real max: ', torch.max(torch.cat([weight[None] for weight in weights])))
+        
         for _ in range(self.sp_hypers.NUM_PRUNNINGS):
-            weights = torch.cat([weight[None] for weight in weights])
-            max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA_WEIGHTS)
-
-            factors = q_func(weights, max_weight * self.sp_hypers.PRUNNING_THRESHOLD, max_weight * self.sp_hypers.PRUNNING_THRESHOLD_DELTA, self.sp_hypers.Q_FUNC_MODE, False)
-            #print(factors)
-            #print(max_weight)
-            coor_systems_final, weights_final = [], []
+            factors = self.get_prunning_factors(weights)            
             for i in range(len(weights)):
-                now = weights[i] * factors[i]
-                if now > epsilon:
-                    weights_final.append(now)
-                    coor_systems_final.append(coor_systems[i])
-            weights = weights_final
-            coor_systems = coor_systems_final
+                weights[i] = weights[i] * (factors[i] * (1.0 - prunning_turn_on) + prunning_turn_on)            
+            weights, coor_systems = self.filter_zero_weights(weights, coor_systems, epsilon = epsilon)
+            
         
         weights = torch.cat([weight[None] for weight in weights])
         
