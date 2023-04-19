@@ -306,7 +306,8 @@ for epoch in pbar:
         now['forces'] = forces_logger.flush()   
     now['lr'] = scheduler.get_last_lr()
     now['epoch'] = epoch
-
+    now['elapsed_time'] = time.time() - TIME_SCRIPT_STARTED
+    
     if hypers.USE_ENERGIES:
         sliding_energies_rmse = hypers.SLIDING_FACTOR * sliding_energies_rmse + (1.0 - hypers.SLIDING_FACTOR) * now['energies']['val']['rmse']
 
