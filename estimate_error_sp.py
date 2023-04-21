@@ -219,7 +219,11 @@ for batch in tqdm(loader):
     #with torch.autograd.set_detect_anomaly(True):
     n_frames, aux_weight, total_main_weight, predictions_energies, targets_energies, predictions_forces, targets_forces = model_sp(batch)
     n_frames_used.append(n_frames)
-    total_main_weights.append(total_main_weight.data.cpu().numpy())
+    if isinstance(total_main_weight, float):
+        total_main_weights.append(total_main_weight)
+    else:
+        total_main_weights.append(total_main_weight.data.cpu().numpy())
+        
     aux_weights.append(float(aux_weight.data.cpu().numpy()))
     if USE_ENERGIES:
         energies_predicted.append(predictions_energies.data.cpu().numpy())
