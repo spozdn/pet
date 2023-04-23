@@ -56,10 +56,6 @@ else:
 SP_HYPERS_PATH = sys.argv[7]
 DEFAULT_HYPERS_PATH = sys.argv[8]
 
-# Only one rotation of only one configuration is supplied to a model at the same time.
-# So huge batch size sp would not speed up the calculation
-# The purpose of batch_size_sp is that pytorch graph is freed after handling batch_size_sp rotations from symmetrization protocol
-# So low batch_size_sp can help fit the calculation into the gpu memory
 BATCH_SIZE_SP = int(sys.argv[9])
 PATH_SAVE_PREDICTIONS = sys.argv[10]
 SHOW_PROGRESS = bool_map[sys.argv[11]]

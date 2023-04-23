@@ -29,7 +29,7 @@ from pet import PET
 from utilities import FullLogger
 from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
 from analysis import get_structural_batch_size, convert_atomic_throughput
-
+from torch_geometric.data import Batch
 
 from sp_frames_calculator import SPFramesCalculator
 
@@ -87,7 +87,10 @@ class PETSP(torch.nn.Module):
         if self.model_aux is not None:
             weight_accumulated = weight_accumulated + weight_aux
         
-        predictions_accumulated = 0.0
+        
+        strucs_minibatch_sp = []
+        weights_minibatch_sp = []
+        
         num_handled = 0
         for additional_rotation in additional_rotations:
             additional_rotation = additional_rotation.to(batch.x.device)
@@ -98,21 +101,31 @@ class PETSP(torch.nn.Module):
                 frame = torch.matmul(frame, additional_rotation)
                 frame = frame[None]
                 frame = frame.repeat(x_initial.shape[0], 1, 1)
-                batch.x = torch.bmm(x_initial, frame)
-                predictions_now = self.model_main(batch)
-                #print(predictions_now)
-                predictions_accumulated = predictions_accumulated + predictions_now * weight
+                
+                batch_now = batch.clone()
+                batch_now.x = torch.bmm(x_initial, frame)
+                
+                strucs_minibatch_sp.append(batch_now)
+                weights_minibatch_sp.append(weight[None])
+               
                 
                 num_handled += 1
                 if num_handled == self.batch_size_sp:
-        
+                    
+                    batch_sp = Batch.from_data_list(strucs_minibatch_sp)
+                    weights_minibatch_sp = torch.cat(weights_minibatch_sp)
+                    
+                    predictions = self.model_main(batch_sp)
+                    #print("shapes: ", predictions.shape, weights_minibatch_sp.shape)
+                    predictions_accumulated = torch.sum(predictions * weights_minibatch_sp)[None]
+                    
                     result = predictions_accumulated / weight_accumulated
                     result.backward()
                     grads = x_initial.grad
                     x_initial.grad = None
                     yield result, grads, len(frames), weight_aux, total_main_weight
                     
-                    batch.x = x_initial
+                    
                     frames, weights, weight_aux = self.get_all_frames(batch)
                     
                     weight_accumulated = 0.0
@@ -122,24 +135,50 @@ class PETSP(torch.nn.Module):
                     if self.model_aux is not None:
                         weight_accumulated = weight_accumulated + weight_aux
                     
-                    predictions_accumulated = 0.0
+                    strucs_minibatch_sp = []
+                    weights_minibatch_sp = []
                     num_handled = 0
-                
-        if weight_aux > self.epsilon:
-            if self.model_aux is not None:
-                batch.x = x_initial
-                predictions_accumulated = predictions_accumulated + self.model_aux(batch) * weight_aux
-                num_handled += 1
-            
+        
         if num_handled > 0:
             
+            batch_sp = Batch.from_data_list(strucs_minibatch_sp)
+            weights_minibatch_sp = torch.cat(weights_minibatch_sp)
+
+            predictions = self.model_main(batch_sp)
+            #print("shapes: ", predictions.shape, weights_minibatch_sp.shape)
+            predictions_accumulated = torch.sum(predictions * weights_minibatch_sp)[None]
+                    
             result = predictions_accumulated / weight_accumulated
-            
             result.backward()
             grads = x_initial.grad
             x_initial.grad = None
                     
             yield result, grads, len(frames), weight_aux, total_main_weight
+            
+        if weight_aux > self.epsilon:
+            if self.model_aux is not None:
+                
+                frames, weights, weight_aux = self.get_all_frames(batch)
+                    
+                weight_accumulated = 0.0
+                for weight in weights:
+                    weight_accumulated = weight_accumulated + weight
+                weight_accumulated = weight_accumulated * len(additional_rotations)
+                if self.model_aux is not None:
+                    weight_accumulated = weight_accumulated + weight_aux
+                        
+                        
+                batch.x = x_initial
+                predictions_accumulated = self.model_aux(batch) * weight_aux
+                
+                result = predictions_accumulated / weight_accumulated
+                result.backward()
+                grads = x_initial.grad
+                x_initial.grad = None
+
+                yield result, grads, len(frames), weight_aux, total_main_weight
+            
+        
             
     def forward(self, batch):
         if self.n_aug is None:
