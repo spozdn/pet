@@ -123,6 +123,9 @@ def are_same(first, second):
     return True
 
 if PATH_TO_CALC_FOLDER_AUX == 'None' or PATH_TO_CALC_FOLDER_AUX == 'none':
+    PATH_TO_CALC_FOLDER_AUX = None
+    
+if PATH_TO_CALC_FOLDER_AUX is None:
     model_aux, hypers_aux, all_species_aux, self_contributions_aux = None, None, None, None
     
     USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA = hypers_main.USE_ADDITIONAL_SCALAR_ATTRIBUTES 
@@ -259,7 +262,8 @@ for weight in total_main_weights:
         n_fully_aux += 1
             
 #print("The number of structures handled completely by auxiliary model is: ", n_fully_aux, '; ratio is', n_fully_aux / len(aux_weights))
-print(f"Auxiliary model was active for {n_partially_aux}/{len(aux_weights)} structures ")
+if PATH_TO_CALC_FOLDER_AUX is not None:
+    print(f"Auxiliary model was active for {n_partially_aux}/{len(aux_weights)} structures ")
 
 if USE_ENERGIES:
     compositional_features = get_compositional_features(structures, all_species)
