@@ -44,27 +44,20 @@ CHECKPOINT_MAIN = sys.argv[3]
 PATH_TO_CALC_FOLDER_AUX = sys.argv[4]
 CHECKPOINT_AUX = sys.argv[5]
 
-
 bool_map = {'True' : True, 'False' : False}
 
-N_AUG = sys.argv[6]
-if N_AUG == 'None' or N_AUG == 'none':
-    N_AUG = None
-else:
-    N_AUG = int(sys.argv[6])
+SP_HYPERS_PATH = sys.argv[6]
+DEFAULT_HYPERS_PATH = sys.argv[7]
 
-SP_HYPERS_PATH = sys.argv[7]
-DEFAULT_HYPERS_PATH = sys.argv[8]
-
-BATCH_SIZE_SP = int(sys.argv[9])
-PATH_SAVE_PREDICTIONS = sys.argv[10]
-SHOW_PROGRESS = bool_map[sys.argv[11]]
-MAX_NUM = sys.argv[12]
+BATCH_SIZE_SP = int(sys.argv[8])
+PATH_SAVE_PREDICTIONS = sys.argv[9]
+SHOW_PROGRESS = bool_map[sys.argv[10]]
+MAX_NUM = sys.argv[11]
 
 if MAX_NUM == 'None' or MAX_NUM == 'none':
     MAX_NUM = None
 else:
-    MAX_NUM = int(sys.argv[12])
+    MAX_NUM = int(sys.argv[11])
     
 def load_model(path_to_calc_folder, checkpoint):
     hypers_path = path_to_calc_folder + '/hypers_used.yaml'
@@ -196,7 +189,7 @@ sp_frames_calculator = SPFramesCalculator(sp_hypers)
     
 model_sp = PETSP(model_main, model_aux, R_CUT, USE_ENERGIES, USE_FORCES, sp_frames_calculator, BATCH_SIZE_SP, 
                  epsilon = EPSILON, show_progress = SHOW_PROGRESS, max_num = MAX_NUM,
-                n_aug = N_AUG).cuda()
+                n_aug = sp_hypers.N_ADDITIONAL_AUG).cuda()
 
 if USE_ENERGIES:
     all_energies_predicted = []
