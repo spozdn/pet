@@ -43,33 +43,33 @@ ALL_SPECIES_PATH = 'results/test_calc_continuation_0/all_species.npy'
 SELF_CONTRIBUTIONS_PATH = 'results/test_calc_continuation_0/self_contributions.npy'
 PATH_TO_MODEL_STATE_DICT = 'results/test_calc_continuation_0/best_val_mae_energies_model_state_dict' '''
 
-
-Hypers.load_from_file(HYPERS_PATH)
+hypers = Hypers()
+hypers.load_from_file(HYPERS_PATH)
 structures = ase.io.read(STRUCTURES_PATH, index = ':')
 
 all_species = np.load(ALL_SPECIES_PATH)
 
-molecules = [Molecule(structure, Hypers.R_CUT) for structure in tqdm(structures)]
+molecules = [Molecule(structure, hypers.R_CUT, False) for structure in tqdm(structures)]
 max_nums = [molecule.get_max_num() for molecule in molecules]
 max_num = np.max(max_nums)
 graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)]
 
-if Hypers.MULTI_GPU:
-    loader = DataListLoader(graphs, batch_size=Hypers.STRUCTURAL_BATCH_SIZE, shuffle=False)
+if hypers.MULTI_GPU:
+    loader = DataListLoader(graphs, batch_size=hypers.STRUCTURAL_BATCH_SIZE, shuffle=False)
 else:        
-    loader = DataLoader(graphs, batch_size=Hypers.STRUCTURAL_BATCH_SIZE, shuffle=False)
+    loader = DataLoader(graphs, batch_size=hypers.STRUCTURAL_BATCH_SIZE, shuffle=False)
 
 add_tokens = []
-for _ in range(Hypers.N_GNN_LAYERS - 1):
-    add_tokens.append(Hypers.ADD_TOKEN_FIRST)
-add_tokens.append(Hypers.ADD_TOKEN_SECOND)
+for _ in range(hypers.N_GNN_LAYERS - 1):
+    add_tokens.append(hypers.ADD_TOKEN_FIRST)
+add_tokens.append(hypers.ADD_TOKEN_SECOND)
 
-model = PET(Hypers.TRANSFORMER_D_MODEL, Hypers.TRANSFORMER_N_HEAD,
-                       Hypers.TRANSFORMER_DIM_FEEDFORWARD, Hypers.N_TRANS_LAYERS, 
+model = PET(hypers, hypers.TRANSFORMER_D_MODEL, hypers.TRANSFORMER_N_HEAD,
+                       hypers.TRANSFORMER_DIM_FEEDFORWARD, hypers.N_TRANS_LAYERS, 
                        0.0, len(all_species), 
-                       Hypers.N_GNN_LAYERS, Hypers.HEAD_N_NEURONS, Hypers.TRANSFORMERS_CENTRAL_SPECIFIC, Hypers.HEADS_CENTRAL_SPECIFIC, 
+                       hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
                        add_tokens).cuda()
-if Hypers.MULTI_GPU:
+if hypers.MULTI_GPU:
     model = DataParallel(model)
     device = torch.device('cuda:0')
     model = model.to(device)
@@ -86,7 +86,7 @@ all_dipoles_predicted = []
 for _ in tqdm(range(N_AUG)):
     dipoles_predicted = []
     for batch in loader:
-        if not Hypers.MULTI_GPU:
+        if not hypers.MULTI_GPU:
             batch.cuda()
             model.augmentation = True
         else:

@@ -19,10 +19,13 @@ from scipy.spatial.transform import Rotation
 from torch.optim.lr_scheduler import StepLR
 import sys
 import copy
-from hypers import Hypers
 
 class Molecule():
-    def __init__(self, atoms, r_cut):
+    def __init__(self, atoms, r_cut, use_additional_scalar_attributes):
+        
+        self.use_additional_scalar_attributes = use_additional_scalar_attributes
+        
+        
         self.atoms = atoms
         
         positions = self.atoms.get_positions()
@@ -33,7 +36,7 @@ class Molecule():
             self.central_species.append(species[i])
             
             
-        if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if use_additional_scalar_attributes:
             scalar_attributes = self.atoms.arrays['scalar_attributes']
             if len(scalar_attributes.shape) == 1:
                 scalar_attributes = scalar_attributes[:, np.newaxis]
@@ -58,7 +61,7 @@ class Molecule():
         self.neighbor_species = [[] for i in range(len(positions))]
         self.neighbors_pos = [[] for i in range(len(positions))]
         
-        if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if use_additional_scalar_attributes:
             self.neighbor_scalar_attributes = [[] for i in range(len(positions))]
         
         def is_same(first, second):
@@ -70,7 +73,7 @@ class Molecule():
         for i, j, D, S in zip(i_list, j_list, D_list, S_list):
             self.relative_positions[i].append(D)
             self.neighbor_species[i].append(species[j])
-            if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+            if use_additional_scalar_attributes:
                 self.neighbor_scalar_attributes[i].append(scalar_attributes[j])
             for k in range(len(self.neighbors_index[j])):
                 if (self.neighbors_index[j][k] == i) and is_same(self.neighbors_shift[j][k], -S):
@@ -95,13 +98,13 @@ class Molecule():
         neighbors_pos = np.zeros([len(self.relative_positions), max_num], dtype = int)
         neighbors_index = np.zeros([len(self.relative_positions), max_num], dtype = int)
         
-        if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if self.use_additional_scalar_attributes:
             neighbor_scalar_attributes = np.zeros([len(self.relative_positions), max_num, 1])
         
         for i in range(len(self.relative_positions)):
             now = np.array(self.relative_positions[i])
             if len(now) > 0:
-                if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+                if self.use_additional_scalar_attributes:
                     neighbor_scalar_attributes[i, :len(now)] = self.neighbor_scalar_attributes[i]
                 relative_positions[i, :len(now), :] = now
                 neighbors_pos[i, :len(now)] = self.neighbors_pos[i]
@@ -134,10 +137,10 @@ class Molecule():
                   'neighbors_pos' : neighbors_pos,
                   'neighbors_index' : neighbors_index.transpose(0, 1),
                   'nums' : nums,
-                  'mask' : mask}
+                  'mask' : mask}        
+       
         
-        
-        if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if self.use_additional_scalar_attributes:
             kwargs['neighbor_scalar_attributes'] = torch.FloatTensor(neighbor_scalar_attributes)
             kwargs['central_scalar_attributes'] = torch.FloatTensor(self.central_scalar_attributes)
         
@@ -154,7 +157,10 @@ def batch_to_dict(batch):
                   "nums" : batch.nums,
                   "neighbors_index" : batch.neighbors_index.transpose(0, 1),
                   "neighbors_pos" : batch.neighbors_pos}
-    if Hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+    
+    if hasattr(batch, 'neighbor_scalar_attributes'):
         batch_dict['neighbor_scalar_attributes'] = batch.neighbor_scalar_attributes
+    if hasattr(batch, 'central_scalar_attributes'):
         batch_dict['central_scalar_attributes'] = batch.central_scalar_attributes
+        
     return batch_dict
