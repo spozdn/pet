@@ -185,6 +185,9 @@ def func_lr_scheduler(epoch):
 
 scheduler = LambdaLR(optim, func_lr_scheduler)
 
+if Hypers.MODEL_TO_START_WITH is not None:
+    model.load_state_dict(torch.load(Hypers.MODEL_TO_START_WITH))
+    
 if name_to_load is not None:
     checkpoint = torch.load(f'results/{name_to_load}/checkpoint')
 
