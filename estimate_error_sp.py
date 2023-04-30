@@ -184,7 +184,7 @@ for batch in tqdm(loader):
         
     aux_weights.append(float(aux_weight.data.cpu().numpy()))
    
-    dipoles_predicted.append(predictions_dipoles.data.cpu().numpy())
+    dipoles_predicted.append(predictions_dipoles)
     
 
 dipoles_predicted = np.concatenate(dipoles_predicted, axis = 0)

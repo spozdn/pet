@@ -197,7 +197,7 @@ class PETSP(torch.nn.Module):
         predictions_total = 0.0
         n_frames = None
         for predictions, n_frames, weight_aux, total_main_weight in tqdm(self.get_all_contributions(batch, additional_rotations), disable = not self.show_progress):
-            predictions_total += predictions
+            predictions_total += predictions.data.cpu().numpy()
             
         if n_frames is None:
             raise ValueError("all collinear problem happened, but aux model was not provided")
