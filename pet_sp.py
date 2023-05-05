@@ -36,6 +36,7 @@ from sp_frames_calculator import SPFramesCalculator
 
 class PETSP(torch.nn.Module):
     def __init__(self, model_main, model_aux, r_cut, use_energies, use_forces, sp_frames_calculator, batch_size_sp,
+                 num_species,
                  epsilon = 1e-10, show_progress = False, max_num = None, n_aug = None):
         super(PETSP, self).__init__()
         self.show_progress = show_progress
@@ -56,15 +57,22 @@ class PETSP(torch.nn.Module):
         self.batch_size_sp = batch_size_sp
         
         self.epsilon = epsilon
+        self.num_species = num_species
         
     def get_all_frames(self, batch):
         all_envs = []
         for env_index in range(batch.x.shape[0]):
             mask_now = torch.logical_not(batch.mask[env_index])
             env_now = batch.x[env_index][mask_now]
+            neighbor_species_now = batch.neighbor_species[env_index][mask_now]
+            #print('env now shape: ', env_now.shape, 'neighbor_species now shape: ', neighbor_species_now.shape)
+            #print(neighbor_species_now)
+            central_specie = batch.central_species[env_index]
+            
+            env_now = [env_now, neighbor_species_now, central_specie]
             all_envs.append(env_now)
             
-        return self.sp_frames_calculator.get_all_frames_global(all_envs, self.r_cut)
+        return self.sp_frames_calculator.get_all_frames_global(all_envs, self.r_cut, self.num_species)
     
     def get_all_contributions(self, batch, additional_rotations):
         x_initial = batch.x

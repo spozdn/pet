@@ -187,7 +187,7 @@ sp_frames_calculator = SPFramesCalculator(sp_hypers)
 
 
     
-model_sp = PETSP(model_main, model_aux, R_CUT, USE_ENERGIES, USE_FORCES, sp_frames_calculator, BATCH_SIZE_SP, 
+model_sp = PETSP(model_main, model_aux, R_CUT, USE_ENERGIES, USE_FORCES, sp_frames_calculator, BATCH_SIZE_SP, len(all_species),
                  epsilon = EPSILON, show_progress = SHOW_PROGRESS, max_num = MAX_NUM,
                 n_aug = sp_hypers.N_ADDITIONAL_AUG).cuda()
 

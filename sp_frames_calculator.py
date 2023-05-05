@@ -163,8 +163,12 @@ class SPFramesCalculator():
     
     
     def get_all_frames(self, env, r_cut_outer):
+        env, neighbor_species, central_specie = env
+        central_specie = int(central_specie)
+        neighbor_species = [int(el) for el in neighbor_species]
+        #print(neighbor_species)
         r_cut_inner = self.get_r_cut_inner(env, r_cut_outer)
-        coor_systems, weights = [], []
+        coor_systems, weights, coor_systems_species = [], [], []
         for first_index in range(len(env)):
             for second_index in range(len(env)):
                 if first_index != second_index:
@@ -191,18 +195,20 @@ class SPFramesCalculator():
 
                             coor_systems.append(coor_system)
                             weights.append(weight)
+                            coor_systems_species.append([central_specie, neighbor_species[first_index], neighbor_species[second_index]])
 
-        return coor_systems, weights
+        return coor_systems, weights, coor_systems_species
     
     
-    def filter_zero_weights(self, weights, coor_systems, epsilon = 1e-10):
-        weights_final, coor_systems_final = [], []
+    def filter_zero_weights(self, weights, coor_systems, coor_systems_species, epsilon = 1e-10):
+        weights_final, coor_systems_final, coor_systems_species_final = [], [], []
         for i in range(len(weights)):
             if weights[i] > epsilon:
                 weights_final.append(weights[i])
                 coor_systems_final.append(coor_systems[i])
-        
-        return weights_final, coor_systems_final
+                coor_systems_species_final.append(coor_systems_species[i])
+                
+        return weights_final, coor_systems_final, coor_systems_species_final
         
         
     def get_prunning_factors(self, weights):
@@ -213,22 +219,34 @@ class SPFramesCalculator():
         
         return factors
     
-    def get_all_frames_global(self, envs_list, r_cut_initial, epsilon = 1e-10):
+    def get_coor_systems_species_types(self, coor_systems_species, num_species, device):
+        result = []
+        for species_now in coor_systems_species:
+            now = species_now[0] * num_species * num_species + species_now[1] * num_species + species_now[2]
+            result.append(now)
+        return torch.FloatTensor(result).to(device)
+    
+    
+    def get_all_frames_global(self, envs_list, r_cut_initial, num_species, epsilon = 1e-10):
         r_cut_outer = min(r_cut_initial, self.sp_hypers.R_CUT_OUTER_UPPER_BOUND)
-        coor_systems, weights = [], []
+        coor_systems, weights, coor_systems_species = [], [], []
         for env in envs_list:
-            coor_systems_now, weights_now = self.get_all_frames(env, r_cut_outer)
-
+            coor_systems_now, weights_now, coor_systems_species_now = self.get_all_frames(env, r_cut_outer)
+            
+            for el in coor_systems_species_now:
+                coor_systems_species.append(el)
+                
             for el in coor_systems_now:
                 coor_systems.append(el)
 
             for el in weights_now:
                 weights.append(el)
         
-        weights, coor_systems = self.filter_zero_weights(weights, coor_systems, epsilon = epsilon)
+        weights, coor_systems, coor_systems_species = self.filter_zero_weights(weights, coor_systems, 
+                                                                                   coor_systems_species, epsilon = epsilon)
         
         if len(weights) == 0:
-            zero_torch = torch.tensor(0.0, dtype = torch.float32).to(envs_list[0].device)
+            zero_torch = torch.tensor(0.0, dtype = torch.float32).to(envs_list[0][0].device)
             return [], [], cutoff_func(zero_torch[None], self.sp_hypers.AUX_THRESHOLD, self.sp_hypers.AUX_THRESHOLD_DELTA, self.sp_hypers.CUTOFF_FUNC_MODE)[0]
         
         max_weight = smooth_max_weighted(weights, weights, self.sp_hypers.BETA_WEIGHTS)
@@ -240,12 +258,35 @@ class SPFramesCalculator():
         
         #print('smooth max: ',  max_weight)
         #print('real max: ', torch.max(torch.cat([weight[None] for weight in weights])))
+        #print("number of frames before prunnings: ", len(weights), len(coor_systems_species), num_species)
         
+        
+        if self.sp_hypers.SPECIES_PRUNNING:
+            coor_systems_species_types = self.get_coor_systems_species_types(coor_systems_species, num_species, envs_list[0][0].device)
+            #print(coor_systems_species_types)
+            weights_tmp = torch.cat([weight[None] for weight in weights])
+            max_species_type = smooth_max_weighted(coor_systems_species_types - torch.max(coor_systems_species_types),
+                                                   weights_tmp, self.sp_hypers.BETA_WEIGHTS) + torch.max(coor_systems_species_types)
+
+            #print('max species type: ', max_species_type, 'max real: ', torch.max(coor_systems_species_types))
+
+            factors = q_func(coor_systems_species_types, max_species_type - 0.5, 0.5, self.sp_hypers.Q_FUNC_MODE, False)
+            #print('factors computed', torch.max(factors))
+            for i in range(len(weights)):
+                weights[i] = weights[i] * (factors[i] * (1.0 - prunning_turn_on) + prunning_turn_on)
+
+            weights, coor_systems, coor_systems_species = self.filter_zero_weights(weights, coor_systems,
+                                                                 coor_systems_species, epsilon = epsilon)
+
+
+            #print("number of frames after species prunnings: ", len(weights), len(coor_systems_species), num_species)
+            
         for _ in range(self.sp_hypers.NUM_PRUNNINGS):
             factors = self.get_prunning_factors(weights)            
             for i in range(len(weights)):
                 weights[i] = weights[i] * (factors[i] * (1.0 - prunning_turn_on) + prunning_turn_on)            
-            weights, coor_systems = self.filter_zero_weights(weights, coor_systems, epsilon = epsilon)
+            weights, coor_systems, coor_systems_species = self.filter_zero_weights(weights, coor_systems,
+                                                             coor_systems_species, epsilon = epsilon)
             
         
         weights = torch.cat([weight[None] for weight in weights])
