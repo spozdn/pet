@@ -78,6 +78,8 @@ val_structures = ase.io.read(VAL_STRUCTURES_PATH, index = ':')
 structures = train_structures + val_structures 
 all_species = get_all_species(structures)
 
+if 'results' not in os.listdir('.'):
+    os.mkdir('results')
 results = os.listdir('results')
 name_to_load = None
 
