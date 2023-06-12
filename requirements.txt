@@ -1,0 +1,6 @@
+numpy
+scipy
+ase
+pathos
+jupyter
+scikit-learn
