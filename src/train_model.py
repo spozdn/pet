@@ -31,6 +31,9 @@ from utilities import FullLogger
 from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
 from analysis import get_structural_batch_size, convert_atomic_throughput
 
+from sam import SAM
+from utilities import get_rotations
+
 TIME_SCRIPT_STARTED = time.time()
 
 TRAIN_STRUCTURES_PATH = sys.argv[1]
@@ -189,7 +192,10 @@ if hypers.MULTI_GPU:
 
 
 import copy
-optim = torch.optim.Adam(model.parameters(), lr = hypers.INITIAL_LR)
+if hypers.USE_SAM:
+    optim = SAM(model.parameters(), torch.optim.Adam, lr = hypers.INITIAL_LR, rho = hypers.SAM_RHO, adaptive = hypers.SAM_ADAPTIVE)
+else:
+    optim = torch.optim.Adam(model.parameters(), lr = hypers.INITIAL_LR)
 
 def func_lr_scheduler(epoch):
     if epoch < hypers.EPOCHS_WARMUP:
@@ -198,7 +204,10 @@ def func_lr_scheduler(epoch):
     num_blocks = delta // hypers.SCHEDULER_STEP_SIZE 
     return 0.5 ** (num_blocks)
 
-scheduler = LambdaLR(optim, func_lr_scheduler)
+if hypers.USE_SAM:
+    scheduler = LambdaLR(optim.base_optimizer, func_lr_scheduler)
+else:
+    scheduler = LambdaLR(optim, func_lr_scheduler)
 
 
 if hypers.MODEL_TO_START_WITH is not None:
@@ -255,7 +264,23 @@ best_val_model = None
 pbar = tqdm(range(hypers.EPOCH_NUM))
 
 
-    
+def get_loss_full(predictions_energies, targets_energies, predictions_forces, targets_forces):
+    if hypers.USE_ENERGIES:
+        energies_logger.train_logger.update(predictions_energies, targets_energies)
+        loss_energies = get_loss(predictions_energies, targets_energies)
+    if hypers.USE_FORCES:
+        forces_logger.train_logger.update(predictions_forces, targets_forces)
+        loss_forces = get_loss(predictions_forces, targets_forces)
+
+    if hypers.USE_ENERGIES and hypers.USE_FORCES: 
+        loss = hypers.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
+        return loss
+
+    if hypers.USE_ENERGIES and (not hypers.USE_FORCES):
+        return loss_energies
+    if hypers.USE_FORCES and (not hypers.USE_ENERGIES):
+        return loss_forces
+
 for epoch in pbar:
 
     model.train(True)
@@ -265,27 +290,26 @@ for epoch in pbar:
             model.augmentation = True
         else:
             model.module.augmentation = True
-        
-        predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
-        if hypers.USE_ENERGIES:
-            energies_logger.train_logger.update(predictions_energies, targets_energies)
-            loss_energies = get_loss(predictions_energies, targets_energies)
-        if hypers.USE_FORCES:
-            forces_logger.train_logger.update(predictions_forces, targets_forces)
-            loss_forces = get_loss(predictions_forces, targets_forces)
 
-        if hypers.USE_ENERGIES and hypers.USE_FORCES: 
-            loss = hypers.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
+        if hypers.USE_SAM:
+            indices = batch.batch.cpu().data.numpy()
+            rotations = torch.FloatTensor(get_rotations(indices, global_aug = hypers.GLOBAL_AUG)).to(batch.x.device)
+            
+            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, rotations = rotations)
+            loss = get_loss_full(predictions_energies, targets_energies, predictions_forces, targets_forces)
             loss.backward()
-
-        if hypers.USE_ENERGIES and (not hypers.USE_FORCES):
-            loss_energies.backward()
-        if hypers.USE_FORCES and (not hypers.USE_ENERGIES):
-            loss_forces.backward()
-
-
-        optim.step()
-        optim.zero_grad()
+            optim.first_step(zero_grad=True)
+            
+            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, rotations = rotations)
+            loss = get_loss_full(predictions_energies, targets_energies, predictions_forces, targets_forces)
+            loss.backward()
+            optim.second_step(zero_grad=True)
+        else:
+            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
+            loss = get_loss_full(predictions_energies, targets_energies, predictions_forces, targets_forces)
+            loss.backward()
+            optim.step()
+            optim.zero_grad()
 
     model.train(False)
     for batch in val_loader:

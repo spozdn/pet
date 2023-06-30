@@ -393,9 +393,9 @@ class PET(torch.nn.Module):
                                      'central_species' : central_species})['atomic_energies']
         return predictions
         
-    def forward(self, batch):
+    def forward(self, batch, rotations = None):
         if self.task == 'both':
-            return self.get_targets(batch)
+            return self.get_targets(batch, rotations = rotations)
         batch_dict = batch_to_dict(batch)
         
         
@@ -443,12 +443,14 @@ class PET(torch.nn.Module):
         return torch_geometric.nn.global_add_pool(atomic_energies[:, None],
                                                   batch=batch_dict['batch'])[:, 0]
     
-    def get_targets(self, batch):
+    def get_targets(self, batch, rotations = None):
         #print(self.augmentation)
         if self.augmentation:
             #print("here")
-            indices = batch.batch.cpu().data.numpy()
-            rotations = torch.FloatTensor(get_rotations(indices, global_aug = self.hypers.GLOBAL_AUG)).to(batch.x.device)
+            if rotations is None:
+                indices = batch.batch.cpu().data.numpy()
+                rotations = torch.FloatTensor(get_rotations(indices, global_aug = self.hypers.GLOBAL_AUG)).to(batch.x.device)
+                
             batch.x_initial = batch.x.clone().detach()
             batch.x_initial.requires_grad = True
             batch.x = torch.bmm(batch.x_initial, rotations)
