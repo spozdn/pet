@@ -166,8 +166,16 @@ if hypers.USE_ENERGIES:
     
     energies_predicted_mean = energies_predicted_mean + self_contributions_energies
     
-    print(f"energies mae: {get_mae(energies_ground_truth, energies_predicted_mean)}")
-    print(f"energies rmse: {get_rmse(energies_ground_truth, energies_predicted_mean)}")
+    print(f"energies mae per struc: {get_mae(energies_ground_truth, energies_predicted_mean)}")
+    print(f"energies rmse per struc: {get_rmse(energies_ground_truth, energies_predicted_mean)}")
+    
+    n_atoms = np.array([len(struc.positions) for struc in structures])
+    energies_predicted_mean_per_atom = energies_predicted_mean / n_atoms
+    energies_ground_truth_per_atom = energies_ground_truth / n_atoms
+    
+    print(f"energies mae per atom: {get_mae(energies_ground_truth_per_atom, energies_predicted_mean_per_atom)}")
+    print(f"energies rmse per atom: {get_rmse(energies_ground_truth_per_atom, energies_predicted_mean_per_atom)}")
+    
     
 if hypers.USE_FORCES:
     print(f"forces mae per component: {get_mae(forces_ground_truth, forces_predicted_mean)}")
