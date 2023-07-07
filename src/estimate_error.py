@@ -118,6 +118,18 @@ if hypers.USE_ENERGIES:
 if hypers.USE_FORCES:
     all_forces_predicted = []
     
+#warmup for correct time estimation
+for batch in loader:
+    if not hypers.MULTI_GPU:
+        batch.cuda()
+        model.augmentation = True
+    else:
+        model.module.augmentation = True
+
+    predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
+    break
+    
+begin = time.time()
 for _ in tqdm(range(N_AUG)):
     if hypers.USE_ENERGIES:
         energies_predicted = []
@@ -145,18 +157,23 @@ for _ in tqdm(range(N_AUG)):
         forces_predicted = np.concatenate(forces_predicted, axis = 0)
         all_forces_predicted.append(forces_predicted)
         
+total_time = time.time() - begin
+n_atoms = np.array([len(struc.positions) for struc in structures])
+time_per_atom = total_time / (np.sum(n_atoms) * N_AUG)
  
 if hypers.USE_ENERGIES:
     all_energies_predicted = [el[np.newaxis] for el in all_energies_predicted]
     all_energies_predicted = np.concatenate(all_energies_predicted, axis = 0)
     energies_predicted_mean = np.mean(all_energies_predicted, axis = 0)
     
-if hypers.USE_FORCES:
-    all_forces_predicted = [el[np.newaxis] for el in all_forces_predicted]
-    all_forces_predicted = np.concatenate(all_forces_predicted, axis = 0)
-    forces_predicted_mean = np.mean(all_forces_predicted, axis = 0)
-
-if hypers.USE_ENERGIES:
+    
+    if all_energies_predicted.shape[0] > 1:
+        energies_rotational_discrepancies = all_energies_predicted - energies_predicted_mean[np.newaxis]
+        print('energies_rotational_discrepancies', energies_rotational_discrepancies.shape)
+        energies_rotational_discrepancies_per_atom = energies_rotational_discrepancies / n_atoms[np.newaxis, :]
+        correction = all_energies_predicted.shape[0] / (all_energies_predicted.shape[0] - 1)
+        energies_rotational_std_per_atom = np.sqrt(np.mean(energies_rotational_discrepancies_per_atom ** 2) * correction)
+        
     
     compositional_features = get_compositional_features(structures, all_species)
     self_contributions_energies = []
@@ -169,17 +186,38 @@ if hypers.USE_ENERGIES:
     print(f"energies mae per struc: {get_mae(energies_ground_truth, energies_predicted_mean)}")
     print(f"energies rmse per struc: {get_rmse(energies_ground_truth, energies_predicted_mean)}")
     
-    n_atoms = np.array([len(struc.positions) for struc in structures])
+    
     energies_predicted_mean_per_atom = energies_predicted_mean / n_atoms
     energies_ground_truth_per_atom = energies_ground_truth / n_atoms
     
     print(f"energies mae per atom: {get_mae(energies_ground_truth_per_atom, energies_predicted_mean_per_atom)}")
     print(f"energies rmse per atom: {get_rmse(energies_ground_truth_per_atom, energies_predicted_mean_per_atom)}")
     
+    if all_energies_predicted.shape[0] > 1:
+        print(f"energies rotational discrepancy std per atom: {energies_rotational_std_per_atom}")
+    
     
 if hypers.USE_FORCES:
+    all_forces_predicted = [el[np.newaxis] for el in all_forces_predicted]
+    all_forces_predicted = np.concatenate(all_forces_predicted, axis = 0)
+    forces_predicted_mean = np.mean(all_forces_predicted, axis = 0)
+    
     print(f"forces mae per component: {get_mae(forces_ground_truth, forces_predicted_mean)}")
     print(f"forces rmse per component: {get_rmse(forces_ground_truth, forces_predicted_mean)}")
+    
+    if all_forces_predicted.shape[0] > 1:
+        forces_rotational_discrepancies = all_forces_predicted - forces_predicted_mean[np.newaxis]
+        correction = all_forces_predicted.shape[0] / (all_forces_predicted.shape[0] - 1)
+        forces_rotational_std = np.sqrt(np.mean(forces_rotational_discrepancies ** 2) * correction)
+        print(f"forces rotational discrepancy std per component: {forces_rotational_std} ")
+        
+        
+print(f"approximate time per atom: {time_per_atom} seconds")
+
+'''if hypers.USE_ENERGIES and not hypers.USE_FORCES:
+    print(f"approximate time to compute energies per atom: {time_per_atom} seconds")
+else:
+    print(f"approximate time to compute energies and forces per atom: {time_per_atom} seconds")'''
     
     
 if (PATH_SAVE_PREDICTIONS != 'None') and (PATH_SAVE_PREDICTIONS != 'none'):
