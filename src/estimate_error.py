@@ -29,33 +29,35 @@ from pet import PET
 from utilities import FullLogger
 from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
 from analysis import get_structural_batch_size, convert_atomic_throughput
+import argparse
+
+parser = argparse.ArgumentParser()
 
 
-STRUCTURES_PATH = sys.argv[1]
-PATH_TO_CALC_FOLDER = sys.argv[2]
-CHECKPOINT = sys.argv[3]
-N_AUG = int(sys.argv[4])
-DEFAULT_HYPERS_PATH = sys.argv[5]
-BATCH_SIZE = sys.argv[6]
-PATH_SAVE_PREDICTIONS = sys.argv[7]
+parser.add_argument("STRUCTURES_PATH", help="Path to an xyz file with structures", type = str)
+parser.add_argument("PATH_TO_CALC_FOLDER", help="Path to a folder with a model to use", type = str)
+parser.add_argument("CHECKPOINT", help="Path to a particular checkpoint to use", type = str, choices = ['best_val_mae_energies_model', 'best_val_rmse_energies_model', 'best_val_mae_forces_model', 'best_val_rmse_forces_model',  'best_val_mae_both_model', 'best_val_rmse_both_model'])
 
-HYPERS_PATH = PATH_TO_CALC_FOLDER + '/hypers_used.yaml'
-PATH_TO_MODEL_STATE_DICT = PATH_TO_CALC_FOLDER + '/' + CHECKPOINT + '_state_dict'
-ALL_SPECIES_PATH = PATH_TO_CALC_FOLDER + '/all_species.npy'
-SELF_CONTRIBUTIONS_PATH = PATH_TO_CALC_FOLDER + '/self_contributions.npy'
+parser.add_argument("N_AUG", type = int, help = "Number of rotational augmentations to use. It should be a positive integer")
+parser.add_argument("DEFAULT_HYPERS_PATH", help="path to a YAML file with default hypers", type = str)
+
+parser.add_argument("BATCH_SIZE", type = int, help="Batch size to use for inference. It should be a positive integer or -1. If -1, it will be set to the value used for fitting the provided model.")
+
+parser.add_argument("--PATH_SAVE_PREDICTIONS", help="Path to a folder where to save predictions.", type = str)
+
+args = parser.parse_args()
+
+HYPERS_PATH = args.PATH_TO_CALC_FOLDER + '/hypers_used.yaml'
+PATH_TO_MODEL_STATE_DICT = args.PATH_TO_CALC_FOLDER + '/' + args.CHECKPOINT + '_state_dict'
+ALL_SPECIES_PATH = args.PATH_TO_CALC_FOLDER + '/all_species.npy'
+SELF_CONTRIBUTIONS_PATH = args.PATH_TO_CALC_FOLDER + '/self_contributions.npy'
 
 
-
-'''STRUCTURES_PATH = 'small_data/test_small.xyz'
-HYPERS_PATH = 'results/test_calc_continuation_0/hypers_used.yaml'
-ALL_SPECIES_PATH = 'results/test_calc_continuation_0/all_species.npy'
-SELF_CONTRIBUTIONS_PATH = 'results/test_calc_continuation_0/self_contributions.npy'
-PATH_TO_MODEL_STATE_DICT = 'results/test_calc_continuation_0/best_val_mae_energies_model_state_dict' '''
 
 hypers = Hypers()
 # loading default values for the new hypers potentially added into the codebase after the calculation is done
 # assuming that the default values do not change the logic
-hypers.set_from_files(HYPERS_PATH, DEFAULT_HYPERS_PATH, check_dublicated = False)
+hypers.set_from_files(HYPERS_PATH, args.DEFAULT_HYPERS_PATH, check_dublicated = False)
 
 torch.manual_seed(hypers.RANDOM_SEED)
 np.random.seed(hypers.RANDOM_SEED)
@@ -64,12 +66,11 @@ os.environ['PYTHONHASHSEED'] = str(hypers.RANDOM_SEED)
 torch.cuda.manual_seed(hypers.RANDOM_SEED)
 torch.cuda.manual_seed_all(hypers.RANDOM_SEED)
 
-if BATCH_SIZE == 'None':
-    BATCH_SIZE = hypers.STRUCTURAL_BATCH_SIZE
-else:
-    BATCH_SIZE = int(BATCH_SIZE)
+if args.BATCH_SIZE == -1:
+    args.BATCH_SIZE = hypers.STRUCTURAL_BATCH_SIZE
+
     
-structures = ase.io.read(STRUCTURES_PATH, index = ':')
+structures = ase.io.read(args.STRUCTURES_PATH, index = ':')
 
 all_species = np.load(ALL_SPECIES_PATH)
 if hypers.USE_ENERGIES:
@@ -81,9 +82,9 @@ max_num = np.max(max_nums)
 graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)]
 
 if hypers.MULTI_GPU:
-    loader = DataListLoader(graphs, batch_size=BATCH_SIZE, shuffle=False)
+    loader = DataListLoader(graphs, batch_size=args.BATCH_SIZE, shuffle=False)
 else:        
-    loader = DataLoader(graphs, batch_size=BATCH_SIZE, shuffle=False)
+    loader = DataLoader(graphs, batch_size=args.BATCH_SIZE, shuffle=False)
 
 add_tokens = []
 for _ in range(hypers.N_GNN_LAYERS - 1):
@@ -130,7 +131,7 @@ for batch in loader:
     break
     
 begin = time.time()
-for _ in tqdm(range(N_AUG)):
+for _ in tqdm(range(args.N_AUG)):
     if hypers.USE_ENERGIES:
         energies_predicted = []
     if hypers.USE_FORCES:
@@ -159,7 +160,7 @@ for _ in tqdm(range(N_AUG)):
         
 total_time = time.time() - begin
 n_atoms = np.array([len(struc.positions) for struc in structures])
-time_per_atom = total_time / (np.sum(n_atoms) * N_AUG)
+time_per_atom = total_time / (np.sum(n_atoms) * args.N_AUG)
  
 if hypers.USE_ENERGIES:
     all_energies_predicted = [el[np.newaxis] for el in all_energies_predicted]
@@ -212,7 +213,7 @@ if hypers.USE_FORCES:
         print(f"forces rotational discrepancy std per component: {forces_rotational_std} ")
         
         
-print(f"approximate time per atom: {time_per_atom} seconds")
+print(f"approximate time per atom (batch size is {args.BATCH_SIZE}): {time_per_atom} seconds")
 
 '''if hypers.USE_ENERGIES and not hypers.USE_FORCES:
     print(f"approximate time to compute energies per atom: {time_per_atom} seconds")
@@ -220,11 +221,11 @@ else:
     print(f"approximate time to compute energies and forces per atom: {time_per_atom} seconds")'''
     
     
-if (PATH_SAVE_PREDICTIONS != 'None') and (PATH_SAVE_PREDICTIONS != 'none'):
+if args.PATH_SAVE_PREDICTIONS is not None:
     if hypers.USE_ENERGIES:
-        np.save(PATH_SAVE_PREDICTIONS + '/energies_predicted.npy', energies_predicted_mean)
+        np.save(args.PATH_SAVE_PREDICTIONS + '/energies_predicted.npy', energies_predicted_mean)
     if hypers.USE_FORCES:
-        np.save(PATH_SAVE_PREDICTIONS + '/forces_predicted.npy', forces_predicted_mean)
+        np.save(args.PATH_SAVE_PREDICTIONS + '/forces_predicted.npy', forces_predicted_mean)
     
 
 
