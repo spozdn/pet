@@ -30,18 +30,21 @@ from pet import PET
 from utilities import FullLogger
 from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
 from analysis import get_structural_batch_size, convert_atomic_throughput
+import argparse
+
 
 TIME_SCRIPT_STARTED = time.time()
+parser = argparse.ArgumentParser()
 
-TRAIN_STRUCTURES_PATH = sys.argv[1]
-VAL_STRUCTURES_PATH = sys.argv[2]
-
-PROVIDED_HYPERS_PATH = sys.argv[3]
-DEFAULT_HYPERS_PATH = sys.argv[4]
-NAME_OF_CALCULATION = sys.argv[5]
+parser.add_argument("TRAIN_STRUCTURES_PATH", help="Path to an xyz file with train structures", type = str)
+parser.add_argument("VAL_STRUCTURES_PATH", help="Path to an xyz file with val structures", type = str)
+parser.add_argument("PROVIDED_HYPERS_PATH", help="Path to a YAML file with provided hypers", type = str)
+parser.add_argument("DEFAULT_HYPERS_PATH", help="Path to a YAML file with default hypers", type = str)
+parser.add_argument("NAME_OF_CALCULATION", help="Name of this calculation", type = str)
+args = parser.parse_args()
 
 hypers = Hypers()
-hypers.set_from_files(PROVIDED_HYPERS_PATH, DEFAULT_HYPERS_PATH)
+hypers.set_from_files(args.PROVIDED_HYPERS_PATH, args.DEFAULT_HYPERS_PATH)
 
 #TRAIN_STRUCTURES = '../experiments/hme21_iteration_3/hme21_train.xyz'
 #VAL_STRUCTURES = '../experiments/hme21_iteration_3/hme21_val.xyz'
@@ -58,7 +61,7 @@ if hypers.CUDA_DETERMINISTIC:
     torch.backends.cudnn.benchmark = False
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     
-train_structures = ase.io.read(TRAIN_STRUCTURES_PATH, index = ':')
+train_structures = ase.io.read(args.TRAIN_STRUCTURES_PATH, index = ':')
 
     
 if 'STRUCTURAL_BATCH_SIZE' not in hypers.__dict__.keys():
@@ -74,7 +77,7 @@ if 'EPOCHS_WARMUP' not in hypers.__dict__.keys():
     hypers.EPOCHS_WARMUP = convert_atomic_throughput(train_structures, hypers.EPOCHS_WARMUP_ATOMIC)
     
     
-val_structures = ase.io.read(VAL_STRUCTURES_PATH, index = ':')
+val_structures = ase.io.read(args.VAL_STRUCTURES_PATH, index = ':')
 structures = train_structures + val_structures 
 all_species = get_all_species(structures)
 
@@ -82,7 +85,7 @@ if 'results' not in os.listdir('.'):
     os.mkdir('results')
 results = os.listdir('results')
 name_to_load = None
-
+NAME_TO_CALCULATION = args.NAME_TO_CALCULATION
 if NAME_OF_CALCULATION in results:
     name_to_load = NAME_OF_CALCULATION
     for i in range(100000):
