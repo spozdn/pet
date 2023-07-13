@@ -1,3 +1,6 @@
+Run model
+=========
+
 The script src/estimate_error.py can be used to run fitted PET models on the new (test) structures. The usage is the following:
 
 .. code-block:: bash

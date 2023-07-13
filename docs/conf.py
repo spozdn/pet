@@ -31,7 +31,7 @@ project = 'PET'
 
 
 extensions = [
-     "sphinx_rtd_theme", "nbsphinx", "sphinxcontrib.napoleon", "sphinx_togglebutton"
+     "sphinx_rtd_theme", "sphinx_togglebutton"
 ]
 
 # Add any paths that contain templates here, relative to this directory.

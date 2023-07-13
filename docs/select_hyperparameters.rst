@@ -1,3 +1,7 @@
+Select hyperparameters
+======================
+
+
 The cutoff radius is the only hyperparameter that must be specified for a particular dataset. The selected cutoff significantly impacts the model. Its accuracy and fitting/inference times are very sensitive to this parameter.
 
 A good starting point is to select a cutoff radius that ensures about 20 neighbors on average. This can be done by analyzing the neighbor lists for different cutoffs before launching the training script. `This <https://wiki.fysik.dtu.dk/ase/ase/neighborlist.html>`_ is an example of a neighbor list constructor in Python.

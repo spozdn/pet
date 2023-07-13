@@ -1,3 +1,6 @@
+Train model
+===========
+
 The script src/train_model.py can be used to fit PET models. The usage is the following:
 
 .. code-block:: bash
