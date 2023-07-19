@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Train model &mdash; PET  documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/togglebutton.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+        <script>let toggleHintShow = 'Click to show';</script>
+        <script>let toggleHintHide = 'Click to hide';</script>
+        <script>let toggleOpenOnPrint = 'true';</script>
+        <script src="_static/togglebutton.js"></script>
+        <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Select hyperparameters" href="select_hyperparameters.html" />
+    <link rel="prev" title="PET" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PET
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Train model</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Train model</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Select hyperparameters</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="select_hyperparameters.html">Select hyperparameters</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Run model</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="run_model.html">Run model</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PET</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Train model</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/train_model.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="train-model">
+<h1>Train model<a class="headerlink" href="#train-model" title="Permalink to this heading"></a></h1>
+<p>The script src/train_model.py can be used to fit PET models. The usage is the following:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>python3<span class="w"> </span>train_model.py<span class="w"> </span>&lt;train_structures_path&gt;<span class="w">  </span>&lt;val_structures_path&gt;<span class="w"> </span>&lt;provided_hypers_path&gt;<span class="w"> </span>&lt;default_hypers_path&gt;<span class="w"> </span>&lt;name_of_calculation&gt;
+</pre></div>
+</div>
+<p>Here <code class="code docutils literal notranslate"><span class="pre">&lt;train_structures_path&gt;</span></code> and <code class="code docutils literal notranslate"><span class="pre">&lt;val_structures_path&gt;</span></code> are paths to training and validation datasets. Both datasets should be contained in the xyz files readable by the <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.read">Atomic Simulation Environment package</a>. Energies should be stored in the <code class="code docutils literal notranslate"><span class="pre">.info</span></code> field of the corresponding <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/atoms.html">Atoms object</a> by the key <code class="code docutils literal notranslate"><span class="pre">energy</span></code>. Forces should be stored in the <code class="code docutils literal notranslate"><span class="pre">.arrays</span></code> field by the key <code class="code docutils literal notranslate"><span class="pre">forces</span></code>. In other words, they should be accessible as:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">ase.io</span>
+<span class="n">structures</span> <span class="o">=</span> <span class="n">ase</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">structures_path</span><span class="p">,</span> <span class="n">index</span> <span class="o">=</span> <span class="s1">&#39;:&#39;</span><span class="p">)</span>
+<span class="n">energy_of_the_first_configuration</span> <span class="o">=</span> <span class="n">structures</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;energy&#39;</span><span class="p">]</span>
+<span class="n">forces_of_the_first_configurations</span> <span class="o">=</span> <span class="n">structures</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;forces&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Please ensure that the units of energies, forces, and atomic positions are in line with each other. That is, units of forces are units of energies divided by units of atomic positions.</p>
+<p>It is possible to use only energies or only forces for fitting. In this case, one should specify the desired behavior setting corresponding hyperparameters, as will be discussed later.</p>
+<p>There is a lot of flexibility in constructing a Point Edge Transformer neural network. In addition, one should specify how the fitting process is performed. This results in a relatively large set of hyperparameters controlling every aspect of architecture and a fitting procedure. The complete list of hypers can be accessed at default/default_hypers.yaml.</p>
+<p>The good news is that to get good results, one should change only a few hypers from the default values. A user can create a YAML file with only a very few hyperparameters. Next, the training script should be supplied with a user YAML file and a YAML file with default hypers at default_hypers/default_hypers.yaml. It will result in that only hypers specified by a user being changed from the default values. For instance, to launch a calculation where only the cutoff radius differs from the default value, one should create a YAML file with one line “R_CUT: &lt;your_value&gt;” and launch the training script providing it with both this file and default_hypers/default_hypers.yaml.</p>
+<p>Finally, the last argument specifies the name of the calculation. When the training script is launched, it creates a folder “results/&lt;provided_name_of_calculation&gt;” and stores all the checkpoints, logs, and other information there.</p>
+<p>A stopping criterion for the fitting procedure is either reaching a maximal number of epochs or reaching a maximal fitting time. The former can be specified either with the hyper “EPOCH_NUM”, while the latter can be set with “MAX_TIME” (in seconds). After the training is done, it is possible to continue fitting from the last checkpoint if the model appears to be underfitted. One has to relaunch the training script with the same calculation name. This time all the results will be stored in a folder “results/&lt;provided_name_of_calculation&gt;_continuation_0”. Next time it will be “continuation_1” and so on.</p>
+<p><a class="reference external" href="https://zenodo.org/record/7967079">This link</a> contains a code snippet illustrating how one can read logs and plot a dependence of the validation error in energies or forces on the epoch number. It is given in the jupyter notebooks calculations/coll/plotting_energies.ipynb and calculations/coll/plotting_forces.ipynb, for example (One needs to download only the small file). Such plots show if the model has already converged or if it is desirable to continue the fitting procedure, as described above.</p>
+<p>Another useful file in the calculation folder is “summary.txt” which contains a few lines with the best MAE/RMSE in energies/forces on a validation dataset.</p>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="PET" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="select_hyperparameters.html" class="btn btn-neutral float-right" title="Select hyperparameters" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright .</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
