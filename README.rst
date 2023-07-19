@@ -10,9 +10,9 @@ This repository contains an implementation of Point Edge Transformer (PET), inte
 Installation
 ++++++++++++
 
-1. run :bash:`pip install -r requirements.txt`
-2. install `pytorch-geometric <https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html>`_ matching your version of CUDA
-3. After that 3 command-line tools are at your disposal - src/train_model.py, src/estimate_error.py, src/estimate_error_sp.py
+1. Run :bash:`pip install -r requirements.txt`
+2. Install `pytorch-geometric <https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html>`_ matching your version of CUDA
+3. After that three command-line tools are at your disposal - src/train_model.py, src/estimate_error.py, src/estimate_error_sp.py
    
    
 ++++++++++
