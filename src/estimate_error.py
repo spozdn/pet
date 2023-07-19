@@ -39,11 +39,13 @@ parser.add_argument("PATH_TO_CALC_FOLDER", help="Path to a folder with a model t
 parser.add_argument("CHECKPOINT", help="Path to a particular checkpoint to use", type = str, choices = ['best_val_mae_energies_model', 'best_val_rmse_energies_model', 'best_val_mae_forces_model', 'best_val_rmse_forces_model',  'best_val_mae_both_model', 'best_val_rmse_both_model'])
 
 parser.add_argument("N_AUG", type = int, help = "Number of rotational augmentations to use. It should be a positive integer")
-parser.add_argument("DEFAULT_HYPERS_PATH", help="path to a YAML file with default hypers", type = str)
+parser.add_argument("DEFAULT_HYPERS_PATH", help="Path to a YAML file with default hypers", type = str)
 
 parser.add_argument("BATCH_SIZE", type = int, help="Batch size to use for inference. It should be a positive integer or -1. If -1, it will be set to the value used for fitting the provided model.")
 
 parser.add_argument("--PATH_SAVE_PREDICTIONS", help="Path to a folder where to save predictions.", type = str)
+parser.add_argument("--VERBOSE", help="Show more details",
+                    action="store_true")
 
 args = parser.parse_args()
 
@@ -195,7 +197,8 @@ if hypers.USE_ENERGIES:
     print(f"energies rmse per atom: {get_rmse(energies_ground_truth_per_atom, energies_predicted_mean_per_atom)}")
     
     if all_energies_predicted.shape[0] > 1:
-        print(f"energies rotational discrepancy std per atom: {energies_rotational_std_per_atom}")
+        if args.VERBOSE:
+            print(f"energies rotational discrepancy std per atom: {energies_rotational_std_per_atom}")
     
     
 if hypers.USE_FORCES:
@@ -210,10 +213,12 @@ if hypers.USE_FORCES:
         forces_rotational_discrepancies = all_forces_predicted - forces_predicted_mean[np.newaxis]
         correction = all_forces_predicted.shape[0] / (all_forces_predicted.shape[0] - 1)
         forces_rotational_std = np.sqrt(np.mean(forces_rotational_discrepancies ** 2) * correction)
-        print(f"forces rotational discrepancy std per component: {forces_rotational_std} ")
+        if args.VERBOSE:
+            print(f"forces rotational discrepancy std per component: {forces_rotational_std} ")
         
-        
-print(f"approximate time per atom (batch size is {args.BATCH_SIZE}): {time_per_atom} seconds")
+
+if args.VERBOSE:
+    print(f"approximate time per atom (batch size is {args.BATCH_SIZE}): {time_per_atom} seconds")
 
 '''if hypers.USE_ENERGIES and not hypers.USE_FORCES:
     print(f"approximate time to compute energies per atom: {time_per_atom} seconds")
