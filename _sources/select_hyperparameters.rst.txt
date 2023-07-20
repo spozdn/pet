@@ -16,7 +16,7 @@ For such hyperparameters as "SCHEDULER_STEP_SIZE", "EPOCH_NUM", "BATCH_SIZE", an
 
 Thus, in order to increase the step size of the learning rate scheduler by, let's say, 2 times, one can take the default value for "SCHEDULER_STEP_SIZE_ATOMIC" from the default_hypers/default_hypers.yaml and specify a value that's twice as large.
 
-To fit the model only on energies, one can specify: "USE_FORCES: False". Specification for fitting on forces is: "USE_ENERGIES: False".
+To fit the model only on energies, one can specify: "USE_FORCES: False". Specification for fitting only on forces is: "USE_ENERGIES: False".
 
 
 
