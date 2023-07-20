@@ -1,3 +1,5 @@
+.. inclusion-marker-preambule-start-first
+
 .. role:: bash(code)
    :language: bash
    
@@ -14,9 +16,19 @@ Installation
 2. Install `pytorch-geometric <https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html>`_ matching your version of CUDA
 3. After that three command-line tools are at your disposal - src/train_model.py, src/estimate_error.py, src/estimate_error_sp.py
    
+.. inclusion-marker-preambule-end-first
+
++++++++++++++
+Documentation
++++++++++++++
+
+Documentation can be found `here <https://serfg.github.io/pet/>`_.
    
+.. inclusion-marker-preambule-start-second
 ++++++++++
 References
 ++++++++++
 
 [1] Pozdnyakov, Sergey N., and Michele Ceriotti. "Smooth, exact rotational symmetrization for deep learning on point clouds." arXiv preprint arXiv:2305.19302 (2023).
+
+.. inclusion-marker-preambule-end-second
