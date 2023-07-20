@@ -90,7 +90,7 @@ if 'results' not in os.listdir('.'):
     os.mkdir('results')
 results = os.listdir('results')
 name_to_load = None
-NAME_TO_CALCULATION = args.name_of_calculation
+NAME_OF_CALCULATION = args.name_of_calculation
 if NAME_OF_CALCULATION in results:
     name_to_load = NAME_OF_CALCULATION
     for i in range(100000):

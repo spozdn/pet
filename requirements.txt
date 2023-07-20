@@ -4,3 +4,4 @@ ase
 pathos
 jupyter
 scikit-learn
+argparse
