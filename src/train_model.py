@@ -33,6 +33,8 @@ from analysis import get_structural_batch_size, convert_atomic_throughput
 import argparse
 
 
+
+
 TIME_SCRIPT_STARTED = time.time()
 parser = argparse.ArgumentParser()
 
@@ -42,6 +44,8 @@ parser.add_argument("provided_hypers_path", help="Path to a YAML file with provi
 parser.add_argument("default_hypers_path", help="Path to a YAML file with default hypers", type = str)
 parser.add_argument("name_of_calculation", help="Name of this calculation", type = str)
 args = parser.parse_args()
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 hypers = Hypers()
 hypers.set_from_files(args.provided_hypers_path, args.default_hypers_path)
@@ -53,10 +57,11 @@ torch.manual_seed(hypers.RANDOM_SEED)
 np.random.seed(hypers.RANDOM_SEED)
 random.seed(hypers.RANDOM_SEED)
 os.environ['PYTHONHASHSEED'] = str(hypers.RANDOM_SEED)
-torch.cuda.manual_seed(hypers.RANDOM_SEED)
-torch.cuda.manual_seed_all(hypers.RANDOM_SEED)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(hypers.RANDOM_SEED)
+    torch.cuda.manual_seed_all(hypers.RANDOM_SEED)
 
-if hypers.CUDA_DETERMINISTIC:
+if hypers.CUDA_DETERMINISTIC and torch.cuda.is_available():
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.benchmark = False
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -183,12 +188,11 @@ model = PET(hypers, hypers.TRANSFORMER_D_MODEL, hypers.TRANSFORMER_N_HEAD,
                        hypers.TRANSFORMER_DIM_FEEDFORWARD, hypers.N_TRANS_LAYERS, 
                        0.0, len(all_species), 
                        hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
-                       add_tokens).cuda()
+                       add_tokens).to(device)
 
-if hypers.MULTI_GPU:
+if hypers.MULTI_GPU and torch.cuda.is_available():
     model = DataParallel(model)
-    device = torch.device('cuda:0')
-    model = model.to(device)
+    model = model.to(torch.device('cuda:0'))
 
 
 import copy
@@ -229,7 +233,7 @@ if hypers.USE_FORCES:
     model.train(False)
     for batch in val_loader:
         if not hypers.MULTI_GPU:
-            batch.cuda()
+            batch.to(device)
             model.augmentation = False
         else:
             model.module.augmentation = False
@@ -264,7 +268,7 @@ for epoch in pbar:
     model.train(True)
     for batch in train_loader:
         if not hypers.MULTI_GPU:
-            batch.cuda()
+            batch.to(device)
             model.augmentation = True
         else:
             model.module.augmentation = True
@@ -293,7 +297,7 @@ for epoch in pbar:
     model.train(False)
     for batch in val_loader:
         if not hypers.MULTI_GPU:
-            batch.cuda()
+            batch.to(device)
             model.augmentation = False
         else:
             model.module.augmentation = False

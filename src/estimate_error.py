@@ -49,6 +49,8 @@ parser.add_argument("--verbose", help="Show more details",
 
 args = parser.parse_args()
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 HYPERS_PATH = args.path_to_calc_folder + '/hypers_used.yaml'
 PATH_TO_MODEL_STATE_DICT = args.path_to_calc_folder + '/' + args.checkpoint + '_state_dict'
 ALL_SPECIES_PATH = args.path_to_calc_folder + '/all_species.npy'
@@ -65,8 +67,9 @@ torch.manual_seed(hypers.RANDOM_SEED)
 np.random.seed(hypers.RANDOM_SEED)
 random.seed(hypers.RANDOM_SEED)
 os.environ['PYTHONHASHSEED'] = str(hypers.RANDOM_SEED)
-torch.cuda.manual_seed(hypers.RANDOM_SEED)
-torch.cuda.manual_seed_all(hypers.RANDOM_SEED)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(hypers.RANDOM_SEED)
+    torch.cuda.manual_seed_all(hypers.RANDOM_SEED)
 
 if args.batch_size == -1:
     args.batch_size = hypers.STRUCTURAL_BATCH_SIZE
@@ -97,11 +100,11 @@ model = PET(hypers, hypers.TRANSFORMER_D_MODEL, hypers.TRANSFORMER_N_HEAD,
                        hypers.TRANSFORMER_DIM_FEEDFORWARD, hypers.N_TRANS_LAYERS, 
                        0.0, len(all_species), 
                        hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
-                       add_tokens).cuda()
-if hypers.MULTI_GPU:
+                       add_tokens).to(device)
+
+if hypers.MULTI_GPU and torch.cuda.is_available():
     model = DataParallel(model)
-    device = torch.device('cuda:0')
-    model = model.to(device)
+    model = model.to( torch.device('cuda:0'))
     
 model.load_state_dict(torch.load(PATH_TO_MODEL_STATE_DICT))
 model.eval()
@@ -124,7 +127,7 @@ if hypers.USE_FORCES:
 #warmup for correct time estimation
 for batch in loader:
     if not hypers.MULTI_GPU:
-        batch.cuda()
+        batch.to(device)
         model.augmentation = True
     else:
         model.module.augmentation = True
@@ -141,7 +144,7 @@ for _ in tqdm(range(args.n_aug)):
     
     for batch in loader:
         if not hypers.MULTI_GPU:
-            batch.cuda()
+            batch.to(device)
             model.augmentation = True
         else:
             model.module.augmentation = True
