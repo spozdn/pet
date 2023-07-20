@@ -1,6 +1,9 @@
 .. q
 
 .. include:: ../README.rst
+   :start-after: inclusion-marker-preambule-start-first
+   :end-before: inclusion-marker-preambule-end-first
+   
 
 .. toctree::
    :glob:
@@ -13,7 +16,7 @@
 .. toctree::
    :glob:
    :maxdepth: 1
-   :caption: Select hyperparameters
+   :caption: Hyperparameters selection
 
    select_hyperparameters 
    
@@ -24,4 +27,9 @@
    :caption: Run model
 
    run_model.rst
+   
+   
+.. include:: ../README.rst
+   :start-after: inclusion-marker-preambule-start-second
+   :end-before: inclusion-marker-preambule-end-second
 
