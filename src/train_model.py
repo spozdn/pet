@@ -139,8 +139,8 @@ if hypers.USE_DIRECT_TARGETS:
     print(np.mean(np.abs(val_direct_targets)))
     np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', rgr.coef_)
 
-train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES) for structure in tqdm(train_structures)]
-val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES) for structure in tqdm(val_structures)]
+train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS) for structure in tqdm(train_structures)]
+val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS) for structure in tqdm(val_structures)]
 
 
 molecules = train_molecules + val_molecules
@@ -223,13 +223,13 @@ history = []
 if hypers.USE_DIRECT_TARGETS:
     direct_targets_logger = FullLogger()
     
-if hypers.USE_FORCES:
-    forces_logger = FullLogger()
+if hypers.USE_TARGET_GRADS:
+    target_grads_logger = FullLogger()
 
 
 
-if hypers.USE_FORCES:
-    all_val_forces = []
+if hypers.USE_TARGET_GRADS:
+    all_val_target_grads = []
     model.train(False)
     for batch in val_loader:
         if not hypers.MULTI_GPU:
@@ -238,14 +238,14 @@ if hypers.USE_FORCES:
         else:
             model.module.augmentation = False
             
-        _, _, _, targets_forces = model(batch)
-        all_val_forces.append(targets_forces.data.cpu().numpy())
-    all_val_forces = np.concatenate(all_val_forces, axis = 0)
+        _, _, _, targets_target_grads = model(batch)
+        all_val_target_grads.append(targets_target_grads.data.cpu().numpy())
+    all_val_target_grads = np.concatenate(all_val_target_grads, axis = 0)
 
-    sliding_forces_rmse = get_rmse(all_val_forces, 0.0)
+    sliding_target_grads_rmse = get_rmse(all_val_target_grads, 0.0)
     
-    forces_rmse_model_keeper = ModelKeeper()
-    forces_mae_model_keeper = ModelKeeper()
+    target_grads_rmse_model_keeper = ModelKeeper()
+    target_grads_mae_model_keeper = ModelKeeper()
 
 if hypers.USE_DIRECT_TARGETS:
     sliding_direct_targets_rmse = get_rmse(val_direct_targets, np.mean(val_direct_targets))
@@ -253,7 +253,7 @@ if hypers.USE_DIRECT_TARGETS:
     direct_targets_rmse_model_keeper = ModelKeeper()
     direct_targets_mae_model_keeper = ModelKeeper()
 
-if hypers.USE_DIRECT_TARGETS and hypers.USE_FORCES:
+if hypers.USE_DIRECT_TARGETS and hypers.USE_TARGET_GRADS:
     multiplication_rmse_model_keeper = ModelKeeper()
     multiplication_mae_model_keeper = ModelKeeper()
     
@@ -273,22 +273,22 @@ for epoch in pbar:
         else:
             model.module.augmentation = True
         
-        predictions_direct_targets, targets_direct_targets, predictions_forces, targets_forces = model(batch)
+        predictions_direct_targets, targets_direct_targets, predictions_target_grads, targets_target_grads = model(batch)
         if hypers.USE_DIRECT_TARGETS:
             direct_targets_logger.train_logger.update(predictions_direct_targets, targets_direct_targets)
             loss_direct_targets = get_loss(predictions_direct_targets, targets_direct_targets)
-        if hypers.USE_FORCES:
-            forces_logger.train_logger.update(predictions_forces, targets_forces)
-            loss_forces = get_loss(predictions_forces, targets_forces)
+        if hypers.USE_TARGET_GRADS:
+            target_grads_logger.train_logger.update(predictions_target_grads, targets_target_grads)
+            loss_target_grads = get_loss(predictions_target_grads, targets_target_grads)
 
-        if hypers.USE_DIRECT_TARGETS and hypers.USE_FORCES: 
-            loss = hypers.ENERGY_WEIGHT * loss_direct_targets / (sliding_direct_targets_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
+        if hypers.USE_DIRECT_TARGETS and hypers.USE_TARGET_GRADS: 
+            loss = hypers.ENERGY_WEIGHT * loss_direct_targets / (sliding_direct_targets_rmse ** 2) + loss_target_grads / (sliding_target_grads_rmse ** 2)
             loss.backward()
 
-        if hypers.USE_DIRECT_TARGETS and (not hypers.USE_FORCES):
+        if hypers.USE_DIRECT_TARGETS and (not hypers.USE_TARGET_GRADS):
             loss_direct_targets.backward()
-        if hypers.USE_FORCES and (not hypers.USE_DIRECT_TARGETS):
-            loss_forces.backward()
+        if hypers.USE_TARGET_GRADS and (not hypers.USE_DIRECT_TARGETS):
+            loss_target_grads.backward()
 
 
         optim.step()
@@ -302,17 +302,17 @@ for epoch in pbar:
         else:
             model.module.augmentation = False
             
-        predictions_direct_targets, targets_direct_targets, predictions_forces, targets_forces = model(batch)
+        predictions_direct_targets, targets_direct_targets, predictions_target_grads, targets_target_grads = model(batch)
         if hypers.USE_DIRECT_TARGETS:
             direct_targets_logger.val_logger.update(predictions_direct_targets, targets_direct_targets)
-        if hypers.USE_FORCES:
-            forces_logger.val_logger.update(predictions_forces, targets_forces)
+        if hypers.USE_TARGET_GRADS:
+            target_grads_logger.val_logger.update(predictions_target_grads, targets_target_grads)
 
     now = {}
     if hypers.USE_DIRECT_TARGETS:
         now['direct_targets'] = direct_targets_logger.flush()
-    if hypers.USE_FORCES:
-        now['forces'] = forces_logger.flush()   
+    if hypers.USE_TARGET_GRADS:
+        now['target_grads'] = target_grads_logger.flush()   
     now['lr'] = scheduler.get_last_lr()
     now['epoch'] = epoch
     now['elapsed_time'] = time.time() - TIME_SCRIPT_STARTED
@@ -324,16 +324,16 @@ for epoch in pbar:
         direct_targets_rmse_model_keeper.update(model, now['direct_targets']['val']['rmse'], epoch)
 
 
-    if hypers.USE_FORCES:
-        sliding_forces_rmse = hypers.SLIDING_FACTOR * sliding_forces_rmse + (1.0 - hypers.SLIDING_FACTOR) * now['forces']['val']['rmse']
-        forces_mae_model_keeper.update(model, now['forces']['val']['mae'], epoch)
-        forces_rmse_model_keeper.update(model, now['forces']['val']['rmse'], epoch)    
+    if hypers.USE_TARGET_GRADS:
+        sliding_target_grads_rmse = hypers.SLIDING_FACTOR * sliding_target_grads_rmse + (1.0 - hypers.SLIDING_FACTOR) * now['target_grads']['val']['rmse']
+        target_grads_mae_model_keeper.update(model, now['target_grads']['val']['mae'], epoch)
+        target_grads_rmse_model_keeper.update(model, now['target_grads']['val']['rmse'], epoch)    
 
-    if hypers.USE_DIRECT_TARGETS and hypers.USE_FORCES:
-        multiplication_mae_model_keeper.update(model, now['forces']['val']['mae'] * now['direct_targets']['val']['mae'], epoch,
-                                               additional_info = [now['direct_targets']['val']['mae'], now['forces']['val']['mae']])
-        multiplication_rmse_model_keeper.update(model, now['forces']['val']['rmse'] * now['direct_targets']['val']['rmse'], epoch,
-                                                additional_info = [now['direct_targets']['val']['rmse'], now['forces']['val']['rmse']])
+    if hypers.USE_DIRECT_TARGETS and hypers.USE_TARGET_GRADS:
+        multiplication_mae_model_keeper.update(model, now['target_grads']['val']['mae'] * now['direct_targets']['val']['mae'], epoch,
+                                               additional_info = [now['direct_targets']['val']['mae'], now['target_grads']['val']['mae']])
+        multiplication_rmse_model_keeper.update(model, now['target_grads']['val']['rmse'] * now['direct_targets']['val']['rmse'], epoch,
+                                                additional_info = [now['direct_targets']['val']['rmse'], now['target_grads']['val']['rmse']])
 
 
     val_mae_message = "val mae/rmse:"
@@ -342,9 +342,9 @@ for epoch in pbar:
     if hypers.USE_DIRECT_TARGETS:
         val_mae_message += f" {now['direct_targets']['val']['mae']}/{now['direct_targets']['val']['rmse']};"
         train_mae_message += f" {now['direct_targets']['train']['mae']}/{now['direct_targets']['train']['rmse']};"
-    if hypers.USE_FORCES:
-        val_mae_message += f" {now['forces']['val']['mae']}/{now['forces']['val']['rmse']}"
-        train_mae_message += f" {now['forces']['train']['mae']}/{now['forces']['train']['rmse']}"
+    if hypers.USE_TARGET_GRADS:
+        val_mae_message += f" {now['target_grads']['val']['mae']}/{now['target_grads']['val']['rmse']}"
+        train_mae_message += f" {now['target_grads']['train']['mae']}/{now['target_grads']['train']['rmse']}"
 
     pbar.set_description(f"lr: {scheduler.get_last_lr()}; " + val_mae_message + train_mae_message)
 
@@ -380,20 +380,20 @@ if hypers.USE_DIRECT_TARGETS:
     save_model('best_val_rmse_direct_targets_model', direct_targets_rmse_model_keeper)
     summary += f'best val rmse in direct_targets: {direct_targets_rmse_model_keeper.best_error} at epoch {direct_targets_rmse_model_keeper.best_epoch}\n'
     
-if hypers.USE_FORCES:
-    save_model('best_val_mae_forces_model', forces_mae_model_keeper)
-    summary += f'best val mae in forces: {forces_mae_model_keeper.best_error} at epoch {forces_mae_model_keeper.best_epoch}\n'
+if hypers.USE_TARGET_GRADS:
+    save_model('best_val_mae_target_grads_model', target_grads_mae_model_keeper)
+    summary += f'best val mae in target_grads: {target_grads_mae_model_keeper.best_error} at epoch {target_grads_mae_model_keeper.best_epoch}\n'
     
-    save_model('best_val_rmse_forces_model', forces_rmse_model_keeper)
-    summary += f'best val rmse in forces: {forces_rmse_model_keeper.best_error} at epoch {forces_rmse_model_keeper.best_epoch}\n'
+    save_model('best_val_rmse_target_grads_model', target_grads_rmse_model_keeper)
+    summary += f'best val rmse in target_grads: {target_grads_rmse_model_keeper.best_error} at epoch {target_grads_rmse_model_keeper.best_epoch}\n'
     
-if hypers.USE_DIRECT_TARGETS and hypers.USE_FORCES:
+if hypers.USE_DIRECT_TARGETS and hypers.USE_TARGET_GRADS:
     save_model('best_val_mae_both_model', multiplication_mae_model_keeper)
-    summary += f'best both (multiplication) mae in direct_targets: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
+    summary += f'best both (multiplication) mae in direct_targets: {multiplication_mae_model_keeper.additional_info[0]} in target_grads: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
     
     
     save_model('best_val_rmse_both_model', multiplication_rmse_model_keeper)
-    summary += f'best both (multiplication) rmse in direct_targets: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n'
+    summary += f'best both (multiplication) rmse in direct_targets: {multiplication_rmse_model_keeper.additional_info[0]} in target_grads: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n'
     
 with open(f"results/{NAME_OF_CALCULATION}/summary.txt", 'w') as f:
     print(summary, file = f)

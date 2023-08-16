@@ -460,7 +460,7 @@ class PET(torch.nn.Module):
         self.task = 'direct_targets'
         predictions = self(batch)
         self.task = 'both'
-        if self.hypers.USE_FORCES:
+        if self.hypers.USE_TARGET_GRADS:
             grads  = torch.autograd.grad(predictions, batch.x_initial, grad_outputs = torch.ones_like(predictions),
                                     create_graph = True)[0]
             neighbors_index = batch.neighbors_index.transpose(0, 1)
@@ -479,9 +479,9 @@ class PET(torch.nn.Module):
             result.append(None)
             result.append(None)
             
-        if self.hypers.USE_FORCES:
+        if self.hypers.USE_TARGET_GRADS:
             result.append(first - second)
-            result.append(batch.forces)
+            result.append(batch.target_grads)
         else:
             result.append(None)
             result.append(None)
