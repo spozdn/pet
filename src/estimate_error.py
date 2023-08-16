@@ -81,7 +81,7 @@ all_species = np.load(ALL_SPECIES_PATH)
 if hypers.USE_DIRECT_TARGETS:
     self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
 
-molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS) for structure in tqdm(structures)]
+molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS, hypers.TARGET_GRADS_NAME) for structure in tqdm(structures)]
 max_nums = [molecule.get_max_num() for molecule in molecules]
 max_num = np.max(max_nums)
 graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)]

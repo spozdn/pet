@@ -124,8 +124,8 @@ print(len(train_structures))
 print(len(val_structures))
 
 if hypers.USE_DIRECT_TARGETS:
-    train_direct_targets = np.array([structure.info['energy'] for structure in train_structures])
-    val_direct_targets = np.array([structure.info['energy'] for structure in val_structures])
+    train_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in train_structures])
+    val_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in val_structures])
 
     train_c_feat = get_compositional_features(train_structures, all_species)
     val_c_feat = get_compositional_features(val_structures, all_species)
@@ -139,8 +139,8 @@ if hypers.USE_DIRECT_TARGETS:
     print(np.mean(np.abs(val_direct_targets)))
     np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', rgr.coef_)
 
-train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS) for structure in tqdm(train_structures)]
-val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS) for structure in tqdm(val_structures)]
+train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS, hypers.TARGET_GRADS_NAME) for structure in tqdm(train_structures)]
+val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS, hypers.TARGET_GRADS_NAME) for structure in tqdm(val_structures)]
 
 
 molecules = train_molecules + val_molecules
@@ -282,7 +282,7 @@ for epoch in pbar:
             loss_target_grads = get_loss(predictions_target_grads, targets_target_grads)
 
         if hypers.USE_DIRECT_TARGETS and hypers.USE_TARGET_GRADS: 
-            loss = hypers.ENERGY_WEIGHT * loss_direct_targets / (sliding_direct_targets_rmse ** 2) + loss_target_grads / (sliding_target_grads_rmse ** 2)
+            loss = hypers.DIRECT_TARGET_WEIGHT * loss_direct_targets / (sliding_direct_targets_rmse ** 2) + loss_target_grads / (sliding_target_grads_rmse ** 2)
             loss.backward()
 
         if hypers.USE_DIRECT_TARGETS and (not hypers.USE_TARGET_GRADS):

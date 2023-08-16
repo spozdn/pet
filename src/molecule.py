@@ -21,10 +21,11 @@ import sys
 import copy
 
 class Molecule():
-    def __init__(self, atoms, r_cut, use_additional_scalar_attributes, use_forces):
+    def __init__(self, atoms, r_cut, use_additional_scalar_attributes, use_target_grads, target_grads_name):
         
         self.use_additional_scalar_attributes = use_additional_scalar_attributes
-        self.use_forces = use_forces
+        self.use_target_grads = use_target_grads
+        self.target_grads_name = target_grads_name
         
         self.atoms = atoms
         
@@ -139,8 +140,8 @@ class Molecule():
                   'nums' : nums,
                   'mask' : mask}
         
-        if self.use_forces:
-            kwargs['forces'] = torch.FloatTensor(self.atoms.arrays['forces'])
+        if self.use_target_grads:
+            kwargs['target_grads'] = torch.FloatTensor(self.atoms.arrays[self.target_grads_name])
         
         if self.use_additional_scalar_attributes:
             kwargs['neighbor_scalar_attributes'] = torch.FloatTensor(neighbor_scalar_attributes)
