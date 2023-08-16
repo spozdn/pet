@@ -123,20 +123,20 @@ with open(f"results/{NAME_OF_CALCULATION}/hypers_used.yaml", "w") as f:
 print(len(train_structures))
 print(len(val_structures))
 
-if hypers.USE_ENERGIES:
-    train_energies = np.array([structure.info['energy'] for structure in train_structures])
-    val_energies = np.array([structure.info['energy'] for structure in val_structures])
+if hypers.USE_DIRECT_TARGETS:
+    train_direct_targets = np.array([structure.info['energy'] for structure in train_structures])
+    val_direct_targets = np.array([structure.info['energy'] for structure in val_structures])
 
     train_c_feat = get_compositional_features(train_structures, all_species)
     val_c_feat = get_compositional_features(val_structures, all_species)
     print(train_c_feat.shape)
 
-    print(np.mean(np.abs(val_energies)))
+    print(np.mean(np.abs(val_direct_targets)))
     rgr = Ridge(alpha = 1e-10, fit_intercept = False)
-    rgr.fit(train_c_feat, train_energies)
-    train_energies -= rgr.predict(train_c_feat)
-    val_energies -= rgr.predict(val_c_feat)
-    print(np.mean(np.abs(val_energies)))
+    rgr.fit(train_c_feat, train_direct_targets)
+    train_direct_targets -= rgr.predict(train_c_feat)
+    val_direct_targets -= rgr.predict(val_c_feat)
+    print(np.mean(np.abs(val_direct_targets)))
     np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', rgr.coef_)
 
 train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES) for structure in tqdm(train_structures)]
@@ -155,12 +155,12 @@ train_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(tr
 val_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(val_molecules)]
 
 
-if hypers.USE_ENERGIES:
+if hypers.USE_DIRECT_TARGETS:
     for index in range(len(train_structures)):
-        train_graphs[index].y = train_energies[index]
+        train_graphs[index].y = train_direct_targets[index]
 
     for index in range(len(val_structures)):
-        val_graphs[index].y = val_energies[index]
+        val_graphs[index].y = val_direct_targets[index]
     
 
     
@@ -220,8 +220,8 @@ if name_to_load is not None:
     
     
 history = []
-if hypers.USE_ENERGIES:
-    energies_logger = FullLogger()
+if hypers.USE_DIRECT_TARGETS:
+    direct_targets_logger = FullLogger()
     
 if hypers.USE_FORCES:
     forces_logger = FullLogger()
@@ -247,13 +247,13 @@ if hypers.USE_FORCES:
     forces_rmse_model_keeper = ModelKeeper()
     forces_mae_model_keeper = ModelKeeper()
 
-if hypers.USE_ENERGIES:
-    sliding_energies_rmse = get_rmse(val_energies, np.mean(val_energies))
+if hypers.USE_DIRECT_TARGETS:
+    sliding_direct_targets_rmse = get_rmse(val_direct_targets, np.mean(val_direct_targets))
     
-    energies_rmse_model_keeper = ModelKeeper()
-    energies_mae_model_keeper = ModelKeeper()
+    direct_targets_rmse_model_keeper = ModelKeeper()
+    direct_targets_mae_model_keeper = ModelKeeper()
 
-if hypers.USE_ENERGIES and hypers.USE_FORCES:
+if hypers.USE_DIRECT_TARGETS and hypers.USE_FORCES:
     multiplication_rmse_model_keeper = ModelKeeper()
     multiplication_mae_model_keeper = ModelKeeper()
     
@@ -273,21 +273,21 @@ for epoch in pbar:
         else:
             model.module.augmentation = True
         
-        predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
-        if hypers.USE_ENERGIES:
-            energies_logger.train_logger.update(predictions_energies, targets_energies)
-            loss_energies = get_loss(predictions_energies, targets_energies)
+        predictions_direct_targets, targets_direct_targets, predictions_forces, targets_forces = model(batch)
+        if hypers.USE_DIRECT_TARGETS:
+            direct_targets_logger.train_logger.update(predictions_direct_targets, targets_direct_targets)
+            loss_direct_targets = get_loss(predictions_direct_targets, targets_direct_targets)
         if hypers.USE_FORCES:
             forces_logger.train_logger.update(predictions_forces, targets_forces)
             loss_forces = get_loss(predictions_forces, targets_forces)
 
-        if hypers.USE_ENERGIES and hypers.USE_FORCES: 
-            loss = hypers.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
+        if hypers.USE_DIRECT_TARGETS and hypers.USE_FORCES: 
+            loss = hypers.ENERGY_WEIGHT * loss_direct_targets / (sliding_direct_targets_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
             loss.backward()
 
-        if hypers.USE_ENERGIES and (not hypers.USE_FORCES):
-            loss_energies.backward()
-        if hypers.USE_FORCES and (not hypers.USE_ENERGIES):
+        if hypers.USE_DIRECT_TARGETS and (not hypers.USE_FORCES):
+            loss_direct_targets.backward()
+        if hypers.USE_FORCES and (not hypers.USE_DIRECT_TARGETS):
             loss_forces.backward()
 
 
@@ -302,26 +302,26 @@ for epoch in pbar:
         else:
             model.module.augmentation = False
             
-        predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
-        if hypers.USE_ENERGIES:
-            energies_logger.val_logger.update(predictions_energies, targets_energies)
+        predictions_direct_targets, targets_direct_targets, predictions_forces, targets_forces = model(batch)
+        if hypers.USE_DIRECT_TARGETS:
+            direct_targets_logger.val_logger.update(predictions_direct_targets, targets_direct_targets)
         if hypers.USE_FORCES:
             forces_logger.val_logger.update(predictions_forces, targets_forces)
 
     now = {}
-    if hypers.USE_ENERGIES:
-        now['energies'] = energies_logger.flush()
+    if hypers.USE_DIRECT_TARGETS:
+        now['direct_targets'] = direct_targets_logger.flush()
     if hypers.USE_FORCES:
         now['forces'] = forces_logger.flush()   
     now['lr'] = scheduler.get_last_lr()
     now['epoch'] = epoch
     now['elapsed_time'] = time.time() - TIME_SCRIPT_STARTED
     
-    if hypers.USE_ENERGIES:
-        sliding_energies_rmse = hypers.SLIDING_FACTOR * sliding_energies_rmse + (1.0 - hypers.SLIDING_FACTOR) * now['energies']['val']['rmse']
+    if hypers.USE_DIRECT_TARGETS:
+        sliding_direct_targets_rmse = hypers.SLIDING_FACTOR * sliding_direct_targets_rmse + (1.0 - hypers.SLIDING_FACTOR) * now['direct_targets']['val']['rmse']
 
-        energies_mae_model_keeper.update(model, now['energies']['val']['mae'], epoch)
-        energies_rmse_model_keeper.update(model, now['energies']['val']['rmse'], epoch)
+        direct_targets_mae_model_keeper.update(model, now['direct_targets']['val']['mae'], epoch)
+        direct_targets_rmse_model_keeper.update(model, now['direct_targets']['val']['rmse'], epoch)
 
 
     if hypers.USE_FORCES:
@@ -329,19 +329,19 @@ for epoch in pbar:
         forces_mae_model_keeper.update(model, now['forces']['val']['mae'], epoch)
         forces_rmse_model_keeper.update(model, now['forces']['val']['rmse'], epoch)    
 
-    if hypers.USE_ENERGIES and hypers.USE_FORCES:
-        multiplication_mae_model_keeper.update(model, now['forces']['val']['mae'] * now['energies']['val']['mae'], epoch,
-                                               additional_info = [now['energies']['val']['mae'], now['forces']['val']['mae']])
-        multiplication_rmse_model_keeper.update(model, now['forces']['val']['rmse'] * now['energies']['val']['rmse'], epoch,
-                                                additional_info = [now['energies']['val']['rmse'], now['forces']['val']['rmse']])
+    if hypers.USE_DIRECT_TARGETS and hypers.USE_FORCES:
+        multiplication_mae_model_keeper.update(model, now['forces']['val']['mae'] * now['direct_targets']['val']['mae'], epoch,
+                                               additional_info = [now['direct_targets']['val']['mae'], now['forces']['val']['mae']])
+        multiplication_rmse_model_keeper.update(model, now['forces']['val']['rmse'] * now['direct_targets']['val']['rmse'], epoch,
+                                                additional_info = [now['direct_targets']['val']['rmse'], now['forces']['val']['rmse']])
 
 
     val_mae_message = "val mae/rmse:"
     train_mae_message = "train mae/rmse:"
 
-    if hypers.USE_ENERGIES:
-        val_mae_message += f" {now['energies']['val']['mae']}/{now['energies']['val']['rmse']};"
-        train_mae_message += f" {now['energies']['train']['mae']}/{now['energies']['train']['rmse']};"
+    if hypers.USE_DIRECT_TARGETS:
+        val_mae_message += f" {now['direct_targets']['val']['mae']}/{now['direct_targets']['val']['rmse']};"
+        train_mae_message += f" {now['direct_targets']['train']['mae']}/{now['direct_targets']['train']['rmse']};"
     if hypers.USE_FORCES:
         val_mae_message += f" {now['forces']['val']['mae']}/{now['forces']['val']['rmse']}"
         train_mae_message += f" {now['forces']['train']['mae']}/{now['forces']['train']['rmse']}"
@@ -373,12 +373,12 @@ def save_model(model_name, model_keeper):
     torch.save(model_keeper.best_model, f'results/{NAME_OF_CALCULATION}/{model_name}')
 
 summary = ''
-if hypers.USE_ENERGIES:    
-    save_model('best_val_mae_energies_model', energies_mae_model_keeper)
-    summary += f'best val mae in energies: {energies_mae_model_keeper.best_error} at epoch {energies_mae_model_keeper.best_epoch}\n'
+if hypers.USE_DIRECT_TARGETS:    
+    save_model('best_val_mae_direct_targets_model', direct_targets_mae_model_keeper)
+    summary += f'best val mae in direct_targets: {direct_targets_mae_model_keeper.best_error} at epoch {direct_targets_mae_model_keeper.best_epoch}\n'
     
-    save_model('best_val_rmse_energies_model', energies_rmse_model_keeper)
-    summary += f'best val rmse in energies: {energies_rmse_model_keeper.best_error} at epoch {energies_rmse_model_keeper.best_epoch}\n'
+    save_model('best_val_rmse_direct_targets_model', direct_targets_rmse_model_keeper)
+    summary += f'best val rmse in direct_targets: {direct_targets_rmse_model_keeper.best_error} at epoch {direct_targets_rmse_model_keeper.best_epoch}\n'
     
 if hypers.USE_FORCES:
     save_model('best_val_mae_forces_model', forces_mae_model_keeper)
@@ -387,13 +387,13 @@ if hypers.USE_FORCES:
     save_model('best_val_rmse_forces_model', forces_rmse_model_keeper)
     summary += f'best val rmse in forces: {forces_rmse_model_keeper.best_error} at epoch {forces_rmse_model_keeper.best_epoch}\n'
     
-if hypers.USE_ENERGIES and hypers.USE_FORCES:
+if hypers.USE_DIRECT_TARGETS and hypers.USE_FORCES:
     save_model('best_val_mae_both_model', multiplication_mae_model_keeper)
-    summary += f'best both (multiplication) mae in energies: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
+    summary += f'best both (multiplication) mae in direct_targets: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
     
     
     save_model('best_val_rmse_both_model', multiplication_rmse_model_keeper)
-    summary += f'best both (multiplication) rmse in energies: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n'
+    summary += f'best both (multiplication) rmse in direct_targets: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n'
     
 with open(f"results/{NAME_OF_CALCULATION}/summary.txt", 'w') as f:
     print(summary, file = f)
