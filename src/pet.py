@@ -481,7 +481,7 @@ class PET(torch.nn.Module):
             
         if self.hypers.USE_TARGET_GRADS:
             
-            if hypers.ARE_TARGET_GRADS_NEGATIVE:
+            if self.hypers.ARE_TARGET_GRADS_NEGATIVE:
                 result.append(first - second)
             else:
                 result.append(second - first)
