@@ -126,7 +126,12 @@ print(len(val_structures))
 if hypers.USE_DIRECT_TARGETS:
     train_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in train_structures])
     val_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in val_structures])
-
+    if len(train_direct_targets.shape) == 1:
+        train_direct_targets = train_direct_targets[:, np.newaxis]
+    if len(val_direct_targets.shape) == 1:
+        val_direct_targets = val_direct_targets[:, np.newaxis]
+    
+    
     train_c_feat = get_compositional_features(train_structures, all_species)
     val_c_feat = get_compositional_features(val_structures, all_species)
     print(train_c_feat.shape)

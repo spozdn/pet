@@ -285,11 +285,11 @@ class Head(torch.nn.Module):
         self.hypers = hypers
         self.nn = nn.Sequential(nn.Linear(n_in, n_neurons), get_activation(hypers),
                                     nn.Linear(n_neurons, n_neurons), get_activation(hypers),
-                                    nn.Linear(n_neurons, 1))
+                                    nn.Linear(n_neurons, hypers.D_TARGET))
        
     def forward(self, batch_dict):
         pooled = batch_dict['pooled']
-        outputs = self.nn(pooled)[..., 0]
+        outputs = self.nn(pooled)
         return {"atomic_predictions" : outputs}
     
     
@@ -440,8 +440,8 @@ class PET(torch.nn.Module):
                                                                                     mask, nums, bond_head, central_species)
        
         
-        return torch_geometric.nn.global_add_pool(atomic_predictions[:, None],
-                                                  batch=batch_dict['batch'])[:, 0]
+        return torch_geometric.nn.global_add_pool(atomic_predictions,
+                                                  batch=batch_dict['batch'])
     
     def get_targets(self, batch):
         #print(self.augmentation)
@@ -461,6 +461,9 @@ class PET(torch.nn.Module):
         predictions = self(batch)
         self.task = 'both'
         if self.hypers.USE_TARGET_GRADS:
+            if hypers.D_TARGET > 1:
+                raise NotImplementedError("not yet for d_model > 1")
+                
             grads  = torch.autograd.grad(predictions, batch.x_initial, grad_outputs = torch.ones_like(predictions),
                                     create_graph = True)[0]
             neighbors_index = batch.neighbors_index.transpose(0, 1)
