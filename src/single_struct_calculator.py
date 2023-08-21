@@ -34,7 +34,7 @@ from analysis import get_structural_batch_size, convert_atomic_throughput
 class SingleStructCalculator():
     def __init__(self, path_to_calc_folder, checkpoint, default_hypers_path): 
         hypers_path = path_to_calc_folder + '/hypers_used.yaml'
-        path_to_model_state_dict = path_to_calc_folder + '/' checkpoint + '_state_dict'
+        path_to_model_state_dict = path_to_calc_folder + '/' + checkpoint + '_state_dict'
         all_species_path = path_to_calc_folder + '/all_species.npy'
         self_contributions_path = path_to_calc_folder + '/self_contributions.npy'
         
@@ -65,6 +65,7 @@ class SingleStructCalculator():
         
         self.model = model
         self.hypers = hypers
+        self.all_species = all_species
 
         
     def forward(self, structure):
@@ -72,7 +73,7 @@ class SingleStructCalculator():
                             self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
                             self.hypers.USE_FORCES)
         
-        graph = molecule.get_graph(molecule.get_max_num(), all_species)
+        graph = molecule.get_graph(molecule.get_max_num(), self.all_species)
         graph.y = None
         graph.forces = None
         predicition_energy, _, prediction_forces, _ = model(graph)
