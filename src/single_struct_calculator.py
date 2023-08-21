@@ -31,7 +31,7 @@ from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
 from analysis import get_structural_batch_size, convert_atomic_throughput
 
 
-class SingleStructCalculaotr():
+class SingleStructCalculator():
     def __init__(self, path_to_calc_folder): 
         hypers_path = args.path_to_calc_folder + '/hypers_used.yaml'
         path_to_model_state_dict = args.path_to_calc_folder + '/' + args.checkpoint + '_state_dict'
