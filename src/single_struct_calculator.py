@@ -32,7 +32,7 @@ from analysis import get_structural_batch_size, convert_atomic_throughput
 
 
 class SingleStructCalculator():
-    def __init__(self, path_to_calc_folder, checkpoint, default_hypers_path): 
+    def __init__(self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", default_hypers_path="default_hypers.yaml", device="cpu"): 
         hypers_path = path_to_calc_folder + '/hypers_used.yaml'
         path_to_model_state_dict = path_to_calc_folder + '/' + checkpoint + '_state_dict'
         all_species_path = path_to_calc_folder + '/all_species.npy'
@@ -60,13 +60,13 @@ class SingleStructCalculator():
             model = DataParallel(model)
             model = model.to( torch.device('cuda:0'))
 
-        model.load_state_dict(torch.load(PATH_TO_MODEL_STATE_DICT))
+        model.load_state_dict(torch.load(path_to_model_state_dict, map_location=torch.device(device)))
         model.eval()
         
         self.model = model
         self.hypers = hypers
         self.all_species = all_species
-
+        self.model.augmentation = False
         
     def forward(self, structure):
         molecule = Molecule(structure, self.hypers.R_CUT, 
@@ -74,9 +74,10 @@ class SingleStructCalculator():
                             self.hypers.USE_FORCES)
         
         graph = molecule.get_graph(molecule.get_max_num(), self.all_species)
-        graph.y = None
-        graph.forces = None
-        predicition_energy, _, prediction_forces, _ = model(graph)
+        graph.y = 0
+        graph.forces = np.zeros_like(structure.positions)
+        prediction_energy, _, prediction_forces, _ = self.model(graph)
+        print("PET Predictions ", prediction_energy, prediction_forces)
         return prediction_energy.data.cpu().numpy(), prediction_forces.data.cpu().numpy()
         
         
