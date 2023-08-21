@@ -32,14 +32,14 @@ from analysis import get_structural_batch_size, convert_atomic_throughput
 
 
 class SingleStructCalculator():
-    def __init__(self, path_to_calc_folder): 
-        hypers_path = args.path_to_calc_folder + '/hypers_used.yaml'
-        path_to_model_state_dict = args.path_to_calc_folder + '/' + args.checkpoint + '_state_dict'
-        all_species_path = args.path_to_calc_folder + '/all_species.npy'
-        self_contributions_path = args.path_to_calc_folder + '/self_contributions.npy'
+    def __init__(self, path_to_calc_folder, checkpoint, default_hypers_path): 
+        hypers_path = path_to_calc_folder + '/hypers_used.yaml'
+        path_to_model_state_dict = path_to_calc_folder + '/' checkpoint + '_state_dict'
+        all_species_path = path_to_calc_folder + '/all_species.npy'
+        self_contributions_path = path_to_calc_folder + '/self_contributions.npy'
         
         hypers = Hypers()
-        hypers.set_from_files(hypers_path, args.default_hypers_path, check_dublicated = False)
+        hypers.set_from_files(hypers_path, default_hypers_path, check_dublicated = False)
         
         all_species = np.load(all_species_path)
         if hypers.USE_ENERGIES:
