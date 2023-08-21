@@ -72,9 +72,11 @@ class SingleStructCalculator():
                             self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
                             self.hypers.USE_FORCES)
         
-        molecule.get_graph(molecule.get_max_num(), all_species)
-        predicition_energy, _, prediction_forces, _ = model(batch)
-        return np.array(prediction_energy), np.array(prediction_forces)
+        graph = molecule.get_graph(molecule.get_max_num(), all_species)
+        graph.y = None
+        graph.forces = None
+        predicition_energy, _, prediction_forces, _ = model(graph)
+        return prediction_energy.data.cpu().numpy(), prediction_forces.data.cpu().numpy()
         
         
         
