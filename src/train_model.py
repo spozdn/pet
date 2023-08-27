@@ -183,13 +183,28 @@ if hypers.USE_DIRECT_TARGETS:
     for index in range(len(train_structures)):
         now = train_direct_targets[index]
         now = now[None, :]
+        mask_nan = np.isnan(now)
+        now[mask_nan] = 0.0
+        
+        mask_target_presents = np.ones_like(now)
+        mask_target_presents[mask_nan] = 0.0
+        
         train_graphs[index].y = torch.FloatTensor(now)
+        train_graphs[index].mask_direct_target_presents = torch.FloatTensor(mask_target_presents)
+        
         
 
     for index in range(len(val_structures)):
         now = val_direct_targets[index]
         now = now[None, :]
+        mask_nan = np.isnan(now)
+        now[mask_nan] = 0.0
+        
+        mask_target_presents = np.ones_like(now)
+        mask_target_presents[mask_nan] = 0.0
+        
         val_graphs[index].y = torch.FloatTensor(now)
+        val_graphs[index].mask_direct_target_presents = torch.FloatTensor(mask_target_presents)
     
 
     
@@ -307,8 +322,8 @@ for epoch in pbar:
         #print("batch y[0]: ", batch.y[0])
         predictions_direct_targets, targets_direct_targets, predictions_target_grads, targets_target_grads = model(batch)
         if hypers.USE_DIRECT_TARGETS:
-            direct_targets_logger.train_logger.update(predictions_direct_targets, targets_direct_targets)
-            loss_direct_targets = get_loss(predictions_direct_targets, targets_direct_targets)
+            direct_targets_logger.train_logger.update(predictions_direct_targets, targets_direct_targets, batch.mask_direct_target_presents)
+            loss_direct_targets = get_loss(predictions_direct_targets, targets_direct_targets, batch.mask_direct_target_presents)
         if hypers.USE_TARGET_GRADS:
             target_grads_logger.train_logger.update(predictions_target_grads, targets_target_grads)
             loss_target_grads = get_loss(predictions_target_grads, targets_target_grads)
@@ -336,7 +351,7 @@ for epoch in pbar:
             
         predictions_direct_targets, targets_direct_targets, predictions_target_grads, targets_target_grads = model(batch)
         if hypers.USE_DIRECT_TARGETS:
-            direct_targets_logger.val_logger.update(predictions_direct_targets, targets_direct_targets)
+            direct_targets_logger.val_logger.update(predictions_direct_targets, targets_direct_targets, batch.mask_direct_target_presents)
         if hypers.USE_TARGET_GRADS:
             target_grads_logger.val_logger.update(predictions_target_grads, targets_target_grads)
 

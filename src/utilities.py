@@ -61,22 +61,32 @@ class Logger:
     def __init__(self):
         self.predictions = []
         self.targets = []
+        self.masks = []
         
-    def update(self, predictions_now, targets_now):
+    def update(self, predictions_now, targets_now, mask_now = None):
         self.predictions.append(predictions_now.data.cpu().numpy())
         self.targets.append(targets_now.data.cpu().numpy())
+        if mask_now is not None:
+            self.masks.append(mask_now.data.cpu().numpy())
+        
         
     def flush(self):
+        if len(self.masks) > 0:
+            self.mask = np.concatenate(self.masks, axis = 0)
+        else:
+            self.mask = None
+            
         self.predictions = np.concatenate(self.predictions, axis = 0)
         self.targets = np.concatenate(self.targets, axis = 0)
         
         output = {}
-        output['rmse'] = get_rmse(self.predictions, self.targets)
-        output['mae'] = get_mae(self.predictions, self.targets)
-        output['relative rmse'] = get_relative_rmse(self.predictions, self.targets)
+        output['rmse'] = get_rmse(self.predictions, self.targets, self.mask)
+        output['mae'] = get_mae(self.predictions, self.targets, self.mask)
+        output['relative rmse'] = get_relative_rmse(self.predictions, self.targets, self.mask)
         
         self.predictions = []
         self.targets = []
+        self.masks = []
         return output
     
 class FullLogger:
@@ -103,18 +113,31 @@ def get_rotations(indices, global_aug = False):
     else:
         return rotations
 
-def get_loss(predictions, targets):
+def get_loss(predictions, targets, mask_target_presents = None):
     delta = predictions - targets
-    return torch.mean(delta * delta)
+    if mask_target_presents is not None:
+        return torch.sum(delta * delta * mask_target_presents) / torch.sum(mask_target_presents)
+    else:
+        return torch.mean(delta * delta)
 
-def get_rmse(first, second):
+def get_rmse(first, second, mask = None):
     delta = first - second
-    return np.sqrt(np.mean(delta * delta))
+    if mask is not None:
+        return np.sqrt(np.sum(delta * delta * mask) / np.sum(mask))
+    else:
+        return np.sqrt(np.mean(delta * delta))
 
-def get_mae(first, second):
+def get_mae(first, second, mask = None):
     delta = first - second
-    return np.mean(np.abs(delta))
+    if mask is not None:
+        return np.sum(np.abs(delta) * mask) / np.sum(mask)
+    else:
+        return np.mean(np.abs(delta))
 
-def get_relative_rmse(predictions, targets):
-    rmse = get_rmse(predictions, targets)
-    return rmse / get_rmse(np.mean(targets), targets)
+def get_relative_rmse(predictions, targets, mask = None):
+    rmse = get_rmse(predictions, targets, mask = None)
+    if mask is None:
+        mean = np.mean(targets)
+    else:
+        mean = np.sum(targets * mask) / np.sum(mask)
+    return rmse / get_rmse(mean, targets, mask = None)
