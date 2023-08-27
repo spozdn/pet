@@ -31,7 +31,7 @@ from utilities import FullLogger
 from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
 from analysis import get_structural_batch_size, convert_atomic_throughput
 import argparse
-
+import math
 
 
 
@@ -123,6 +123,24 @@ with open(f"results/{NAME_OF_CALCULATION}/hypers_used.yaml", "w") as f:
 print(len(train_structures))
 print(len(val_structures))
 
+def fit_with_nans(X, Y, alpha = 1e-10):
+    rgr = Ridge(fit_intercept = False, alpha = alpha)
+    rgr.fit(X, np.zeros_like(Y))
+    
+    for target_index in range(Y.shape[1]):
+        y_now = Y[:, target_index]
+        mask_now = np.logical_not(np.isnan(y_now))
+        X_now = X[mask_now]
+        y_now_masked = y_now[mask_now]
+        if len(y_now_masked) == 0:
+            raise ValueError(f"No data at all for the index {target_index}")
+            
+        rgr_tmp = Ridge(fit_intercept = False, alpha = alpha)
+        rgr_tmp.fit(X_now, y_now_masked)
+        rgr.coef_[target_index] = rgr_tmp.coef_
+        
+    return rgr
+
 if hypers.USE_DIRECT_TARGETS:
     train_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in train_structures])
     val_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in val_structures])
@@ -132,16 +150,17 @@ if hypers.USE_DIRECT_TARGETS:
         val_direct_targets = val_direct_targets[:, np.newaxis]
     
     
+    
     train_c_feat = get_compositional_features(train_structures, all_species)
     val_c_feat = get_compositional_features(val_structures, all_species)
-    print(train_c_feat.shape)
-
-    print(np.mean(np.abs(val_direct_targets)))
-    rgr = Ridge(alpha = 1e-10, fit_intercept = False)
-    rgr.fit(train_c_feat, train_direct_targets)
+    print('train targets shape: ', train_direct_targets.shape)
+    print('train c feat shape: ', train_c_feat.shape)
+    
+    #print(np.mean(np.abs(val_direct_targets)))
+    rgr = fit_with_nans(train_c_feat, train_direct_targets)
     train_direct_targets -= rgr.predict(train_c_feat)
     val_direct_targets -= rgr.predict(val_c_feat)
-    print(np.mean(np.abs(val_direct_targets)))
+    #print(np.mean(np.abs(val_direct_targets)))
     np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', rgr.coef_)
 
 train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS, hypers.TARGET_GRADS_NAME) for structure in tqdm(train_structures)]
@@ -162,10 +181,15 @@ val_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(val_
 
 if hypers.USE_DIRECT_TARGETS:
     for index in range(len(train_structures)):
-        train_graphs[index].y = train_direct_targets[index]
+        now = train_direct_targets[index]
+        now = now[None, :]
+        train_graphs[index].y = torch.FloatTensor(now)
+        
 
     for index in range(len(val_structures)):
-        val_graphs[index].y = val_direct_targets[index]
+        now = val_direct_targets[index]
+        now = now[None, :]
+        val_graphs[index].y = torch.FloatTensor(now)
     
 
     
@@ -277,7 +301,10 @@ for epoch in pbar:
             model.augmentation = True
         else:
             model.module.augmentation = True
+        #print(batch.y)
         
+        #print("batch y shape: ", batch.y.shape)
+        #print("batch y[0]: ", batch.y[0])
         predictions_direct_targets, targets_direct_targets, predictions_target_grads, targets_target_grads = model(batch)
         if hypers.USE_DIRECT_TARGETS:
             direct_targets_logger.train_logger.update(predictions_direct_targets, targets_direct_targets)
