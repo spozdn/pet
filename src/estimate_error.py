@@ -110,14 +110,13 @@ model.load_state_dict(torch.load(PATH_TO_MODEL_STATE_DICT))
 model.eval()
 
 if hypers.USE_DIRECT_TARGETS:
-    direct_targets_ground_truth = np.array([struc.info['direct_targets'] for struc in structures])
+    direct_targets_ground_truth = np.array([struc.info[hypers.TARGET_NAME] for struc in structures])
     
 if hypers.USE_TARGET_GRADS:
-    target_grads_ground_truth = [struc.arrays['target_grads'] for struc in structures]
+    target_grads_ground_truth = [struc.arrays[hypers.TARGET_GRADS_NAME] for struc in structures]
     target_grads_ground_truth = np.concatenate(target_grads_ground_truth, axis = 0)
     
     
-
 if hypers.USE_DIRECT_TARGETS:
     all_direct_targets_predicted = []
     
@@ -182,22 +181,27 @@ if hypers.USE_DIRECT_TARGETS:
         
     
     compositional_features = get_compositional_features(structures, all_species)
-    self_contributions_direct_targets = []
-    for i in range(len(structures)):
-        self_contributions_direct_targets.append(np.dot(compositional_features[i], self_contributions))
-    self_contributions_direct_targets = np.array(self_contributions_direct_targets)
+    rgr = Ridge(fit_intercept = False, alpha = 1e-10)
+    rgr.fit(compositional_features, np.zeros_like(direct_targets_predicted_mean))
+    rgr.coef_ = self_contributions
+    self_contributions_direct_targets = rgr.predict(compositional_features)
     
     direct_targets_predicted_mean = direct_targets_predicted_mean + self_contributions_direct_targets
     
-    print(f"direct_targets mae per struc: {get_mae(direct_targets_ground_truth, direct_targets_predicted_mean)}")
-    print(f"direct_targets rmse per struc: {get_rmse(direct_targets_ground_truth, direct_targets_predicted_mean)}")
+    mask_nan = np.isnan(direct_targets_ground_truth)
+    direct_targets_ground_truth[mask_nan] = 0.0
+    mask_direct_targets_present = np.ones_like(direct_targets_ground_truth)
+    mask_direct_targets_present[mask_nan] = 0.0
+    
+    print(f"direct_targets mae per struc: {get_mae(direct_targets_ground_truth, direct_targets_predicted_mean, mask = mask_direct_targets_present)}")
+    print(f"direct_targets rmse per struc: {get_rmse(direct_targets_ground_truth, direct_targets_predicted_mean, mask = mask_direct_targets_present)}")
     
     
-    direct_targets_predicted_mean_per_atom = direct_targets_predicted_mean / n_atoms
-    direct_targets_ground_truth_per_atom = direct_targets_ground_truth / n_atoms
+    direct_targets_predicted_mean_per_atom = direct_targets_predicted_mean / n_atoms[:, np.newaxis]
+    direct_targets_ground_truth_per_atom = direct_targets_ground_truth / n_atoms[:, np.newaxis]
     
-    print(f"direct_targets mae per atom: {get_mae(direct_targets_ground_truth_per_atom, direct_targets_predicted_mean_per_atom)}")
-    print(f"direct_targets rmse per atom: {get_rmse(direct_targets_ground_truth_per_atom, direct_targets_predicted_mean_per_atom)}")
+    print(f"direct_targets mae per atom: {get_mae(direct_targets_ground_truth_per_atom, direct_targets_predicted_mean_per_atom, mask = mask_direct_targets_present)}")
+    print(f"direct_targets rmse per atom: {get_rmse(direct_targets_ground_truth_per_atom, direct_targets_predicted_mean_per_atom, mask = mask_direct_targets_present)}")
     
     if all_direct_targets_predicted.shape[0] > 1:
         if args.verbose:
