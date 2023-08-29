@@ -38,7 +38,7 @@ parser.add_argument("structures_path", help="Path to an xyz file with structures
 parser.add_argument("path_to_calc_folder", help="Path to a folder with a model to use", type = str)
 parser.add_argument("checkpoint", help="Path to a particular checkpoint to use", type = str, choices = ['best_val_mae_energies_model', 'best_val_rmse_energies_model', 'best_val_mae_forces_model', 'best_val_rmse_forces_model',  'best_val_mae_both_model', 'best_val_rmse_both_model'])
 
-parser.add_argument("n_aug", type = int, help = "A number of rotational augmentations to use. It should be a positive integer")
+parser.add_argument("n_aug", type = int, help = "A number of rotational augmentations to use. It should be a positive integer or -1. If -1, the initial coordinate system will be used, not a single random one, as in the n_aug = 1 case")
 parser.add_argument("default_hypers_path", help="Path to a YAML file with default hypers", type = str)
 
 parser.add_argument("batch_size", type = int, help="Batch size to use for inference. It should be a positive integer or -1. If -1, it will be set to the value used for fitting the provided model.")
@@ -56,7 +56,12 @@ PATH_TO_MODEL_STATE_DICT = args.path_to_calc_folder + '/' + args.checkpoint + '_
 ALL_SPECIES_PATH = args.path_to_calc_folder + '/all_species.npy'
 SELF_CONTRIBUTIONS_PATH = args.path_to_calc_folder + '/self_contributions.npy'
 
-
+if args.n_aug == -1:
+    N_AUG = 1
+    USE_AUGMENTATION = False
+else:
+    N_AUG = args.n_aug
+    USE_AUGMENTATION = True
 
 hypers = Hypers()
 # loading default values for the new hypers potentially added into the codebase after the calculation is done
@@ -128,15 +133,15 @@ if hypers.USE_FORCES:
 for batch in loader:
     if not hypers.MULTI_GPU:
         batch.to(device)
-        model.augmentation = True
+        model.augmentation = USE_AUGMENTATION
     else:
-        model.module.augmentation = True
+        model.module.augmentation = USE_AUGMENTATION
 
     predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
     break
     
 begin = time.time()
-for _ in tqdm(range(args.n_aug)):
+for _ in tqdm(range(N_AUG)):
     if hypers.USE_ENERGIES:
         energies_predicted = []
     if hypers.USE_FORCES:
@@ -145,9 +150,9 @@ for _ in tqdm(range(args.n_aug)):
     for batch in loader:
         if not hypers.MULTI_GPU:
             batch.to(device)
-            model.augmentation = True
+            model.augmentation = USE_AUGMENTATION
         else:
-            model.module.augmentation = True
+            model.module.augmentation = USE_AUGMENTATION
             
         predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
         if hypers.USE_ENERGIES:
@@ -165,7 +170,7 @@ for _ in tqdm(range(args.n_aug)):
         
 total_time = time.time() - begin
 n_atoms = np.array([len(struc.positions) for struc in structures])
-time_per_atom = total_time / (np.sum(n_atoms) * args.n_aug)
+time_per_atom = total_time / (np.sum(n_atoms) * N_AUG)
  
 if hypers.USE_ENERGIES:
     all_energies_predicted = [el[np.newaxis] for el in all_energies_predicted]
