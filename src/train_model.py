@@ -29,6 +29,7 @@ from hypers import Hypers
 from pet import PET
 from utilities import FullLogger
 from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
+from utilities import get_all_means, pack_all_means, get_centered_values
 from analysis import get_structural_batch_size, convert_atomic_throughput
 import argparse
 import math
@@ -142,26 +143,49 @@ def fit_with_nans(X, Y, alpha = 1e-10):
     return rgr
 
 if hypers.USE_DIRECT_TARGETS:
-    train_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in train_structures])
-    val_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in val_structures])
-    if len(train_direct_targets.shape) == 1:
-        train_direct_targets = train_direct_targets[:, np.newaxis]
-    if len(val_direct_targets.shape) == 1:
-        val_direct_targets = val_direct_targets[:, np.newaxis]
-    
-    
-    
-    train_c_feat = get_compositional_features(train_structures, all_species)
-    val_c_feat = get_compositional_features(val_structures, all_species)
-    print('train targets shape: ', train_direct_targets.shape)
-    print('train c feat shape: ', train_c_feat.shape)
-    
-    #print(np.mean(np.abs(val_direct_targets)))
-    rgr = fit_with_nans(train_c_feat, train_direct_targets)
-    train_direct_targets -= rgr.predict(train_c_feat)
-    val_direct_targets -= rgr.predict(val_c_feat)
-    #print(np.mean(np.abs(val_direct_targets)))
-    np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', rgr.coef_)
+    if hypers.TARGET_TYPE not in ['structural', 'atomic']:
+        raise ValueError("Unknown target type")
+        
+    if hypers.TARGET_TYPE == 'structural':        
+        train_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in train_structures])
+        val_direct_targets = np.array([structure.info[hypers.TARGET_NAME] for structure in val_structures])
+        if len(train_direct_targets.shape) == 1:
+            train_direct_targets = train_direct_targets[:, np.newaxis]
+        if len(val_direct_targets.shape) == 1:
+            val_direct_targets = val_direct_targets[:, np.newaxis]
+
+
+
+        train_c_feat = get_compositional_features(train_structures, all_species)
+        val_c_feat = get_compositional_features(val_structures, all_species)
+        print('train targets shape: ', train_direct_targets.shape)
+        print('train c feat shape: ', train_c_feat.shape)
+
+        #print(np.mean(np.abs(val_direct_targets)))
+        rgr = fit_with_nans(train_c_feat, train_direct_targets)
+        train_direct_targets -= rgr.predict(train_c_feat)
+        val_direct_targets -= rgr.predict(val_c_feat)
+        #print(np.mean(np.abs(val_direct_targets)))
+        np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', rgr.coef_)
+        
+        
+    if hypers.TARGET_TYPE == "atomic":
+        train_direct_targets = ([structure.arrays[hypers.TARGET_NAME] for structure in train_structures])
+        val_direct_targets = ([structure.arrays[hypers.TARGET_NAME] for structure in val_structures])
+        
+        train_direct_targets = np.concatenate(train_direct_targets, axis = 0)
+        val_direct_targets = np.concatenate(val_direct_targets, axis = 0)
+        if len(train_direct_targets.shape) == 1:
+            train_direct_targets = train_direct_targets[:, np.newaxis]
+        if len(val_direct_targets.shape) == 1:
+            val_direct_targets = val_direct_targets[:, np.newaxis]
+            
+        all_means = get_all_means(all_species, train_structures)
+        
+        train_direct_targets = get_centered_values(all_species, all_means, train_structures)
+        val_direct_targets = get_centered_values(all_species, all_means, val_structures)
+        
+        np.save(f'results/{NAME_OF_CALCULATION}/all_means.npy', pack_all_means(all_means))
 
 train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS, hypers.TARGET_GRADS_NAME) for structure in tqdm(train_structures)]
 val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS, hypers.TARGET_GRADS_NAME) for structure in tqdm(val_structures)]
@@ -182,7 +206,8 @@ val_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(val_
 if hypers.USE_DIRECT_TARGETS:
     for index in range(len(train_structures)):
         now = train_direct_targets[index]
-        now = now[None, :]
+        if hypers.TARGET_TYPE == 'structural':
+            now = now[None, :]
         mask_nan = np.isnan(now)
         now[mask_nan] = 0.0
         
@@ -196,7 +221,8 @@ if hypers.USE_DIRECT_TARGETS:
 
     for index in range(len(val_structures)):
         now = val_direct_targets[index]
-        now = now[None, :]
+        if hypers.TARGET_TYPE == 'structural':
+            now = now[None, :]
         mask_nan = np.isnan(now)
         now[mask_nan] = 0.0
         

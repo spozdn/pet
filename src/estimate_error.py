@@ -27,9 +27,11 @@ from molecule import Molecule, batch_to_dict
 from hypers import Hypers
 from pet import PET
 from utilities import FullLogger
-from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
+from utilities import get_rmse, get_mae, get_relative_rmse, get_loss, add_means
 from analysis import get_structural_batch_size, convert_atomic_throughput
 import argparse
+from utilities import unpack_all_means
+
 
 parser = argparse.ArgumentParser()
 
@@ -55,7 +57,7 @@ HYPERS_PATH = args.path_to_calc_folder + '/hypers_used.yaml'
 PATH_TO_MODEL_STATE_DICT = args.path_to_calc_folder + '/' + args.checkpoint + '_state_dict'
 ALL_SPECIES_PATH = args.path_to_calc_folder + '/all_species.npy'
 SELF_CONTRIBUTIONS_PATH = args.path_to_calc_folder + '/self_contributions.npy'
-
+ALL_MEANS_PATH = args.path_to_calc_folder + '/all_means.npy'
 
 
 hypers = Hypers()
@@ -110,7 +112,14 @@ model.load_state_dict(torch.load(PATH_TO_MODEL_STATE_DICT))
 model.eval()
 
 if hypers.USE_DIRECT_TARGETS:
-    direct_targets_ground_truth = np.array([struc.info[hypers.TARGET_NAME] for struc in structures])
+    if hypers.TARGET_TYPE == 'structural':  
+        direct_targets_ground_truth = np.array([struc.info[hypers.TARGET_NAME] for struc in structures])
+        if len(direct_targets_ground_truth.shape) == 1:
+            direct_targets_ground_truth = direct_targets_ground_truth[:, np.newaxis]
+            
+    if hypers.TARGET_TYPE == 'atomic':
+        direct_targets_ground_truth = ([struc.arrays[hypers.TARGET_NAME] for struc in structures])
+        direct_targets_ground_truth = np.concatenate(direct_targets_ground_truth, axis = 0)
     
 if hypers.USE_TARGET_GRADS:
     target_grads_ground_truth = [struc.arrays[hypers.TARGET_GRADS_NAME] for struc in structures]
@@ -179,19 +188,24 @@ if hypers.USE_DIRECT_TARGETS:
         correction = all_direct_targets_predicted.shape[0] / (all_direct_targets_predicted.shape[0] - 1)
         direct_targets_rotational_std_per_atom = np.sqrt(np.mean(direct_targets_rotational_discrepancies_per_atom ** 2) * correction)
         
-    
-    compositional_features = get_compositional_features(structures, all_species)
-    rgr = Ridge(fit_intercept = False, alpha = 1e-10)
-    rgr.fit(compositional_features, np.zeros_like(direct_targets_predicted_mean))
-    rgr.coef_ = self_contributions
-    self_contributions_direct_targets = rgr.predict(compositional_features)
-    
-    direct_targets_predicted_mean = direct_targets_predicted_mean + self_contributions_direct_targets
-    
-    mask_nan = np.isnan(direct_targets_ground_truth)
-    direct_targets_ground_truth[mask_nan] = 0.0
-    mask_direct_targets_present = np.ones_like(direct_targets_ground_truth)
-    mask_direct_targets_present[mask_nan] = 0.0
+    if hypers.TARGET_TYPE == 'structural': 
+        compositional_features = get_compositional_features(structures, all_species)
+        rgr = Ridge(fit_intercept = False, alpha = 1e-10)
+        rgr.fit(compositional_features, np.zeros_like(direct_targets_predicted_mean))
+        rgr.coef_ = self_contributions
+        self_contributions_direct_targets = rgr.predict(compositional_features)
+        
+        direct_targets_predicted_mean = direct_targets_predicted_mean + self_contributions_direct_targets
+        
+        mask_nan = np.isnan(direct_targets_ground_truth)
+        direct_targets_ground_truth[mask_nan] = 0.0
+        mask_direct_targets_present = np.ones_like(direct_targets_ground_truth)
+        mask_direct_targets_present[mask_nan] = 0.0
+
+    if hypers.TARGET_TYPE == 'atomic':
+        all_means = unpack_all_means(np.load(ALL_SPECIES_PATH), all_species)
+        direct_targets_predicted_mean = add_means(direct_targets_predicted_mean, all_means, all_species, structures)
+        
     
     print(f"direct_targets mae per struc: {get_mae(direct_targets_ground_truth, direct_targets_predicted_mean, mask = mask_direct_targets_present)}")
     print(f"direct_targets rmse per struc: {get_rmse(direct_targets_ground_truth, direct_targets_predicted_mean, mask = mask_direct_targets_present)}")

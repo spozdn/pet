@@ -141,3 +141,76 @@ def get_relative_rmse(predictions, targets, mask = None):
     else:
         mean = np.sum(targets * mask) / np.sum(mask)
     return rmse / get_rmse(mean, targets, mask = None)
+
+def mean_with_nans(array):
+    nan_mask = np.isnan(array)
+    non_nan_mask = np.logical_not(nan_mask)
+    
+    values = np.copy(array)
+    values[nan_mask] = 0.0
+    
+    mask_present = np.ones_like(values)
+    mask_present[nan_mask] = 0.0
+    
+    denomenator = np.sum(mask_present, axis = 0)
+    print(denomenator)
+    if np.min(denomenator) < 1e-5:
+        raise ValueError("all nans for some target")
+        
+    return np.sum(values, axis = 0) / np.sum(mask_present, axis = 0)
+    
+    
+def get_all_means(all_species, structures):
+    result = {specie : [] for specie in all_species}
+    
+    for structure in structures:
+        atomic_numbers = structure.get_atomic_numbers()
+        targets = structure.arrays[hypers.TARGET_NAME]
+        for index in range(len(atomic_numbers_now)):
+            result[atomic_numbers[index]].append(targets[index])
+    
+    for specie in all_species:
+        if len(result[specie]) > 0:
+            if len(result[specie]) == 0:
+                raise ValueError(f"specie {specie} is present in the validation dataset but not in the train")
+            
+            result[specie] = [el[np.newaxis, :] for el in result[specie]]
+            result[specie] = np.concatenate(result[specie], axis = 0)
+            result[specie] = mean_with_nans(result[specie])
+    return result[specie]
+
+def get_centered_values(all_species, all_means, structures):
+    result = []
+    for structure in structures:
+        current_block = []
+        atomic_numbers = structure.get_atomic_numbers()
+        targets = structure.arrays[hypers.TARGET_NAME]
+        for index in range(len(atomic_numbers)):
+            now = targets[index] - all_means[atomic_numbers[index]]
+            current_block.append(now[np.newaxis, :])
+        current_block = np.concatenate(current_block, axis = 0)
+        result.append(current_block)
+    return result
+
+def add_means(targets, all_means, all_species, structures):
+    result = np.copy(targets)
+    index = 0
+    for structure in structures:
+        for atomic_number in structure.get_atomic_numbers():
+            result[index] += all_means[atomic_number]
+            index += 1
+    return result
+            
+        
+def pack_all_means(all_means, all_species):
+    result = []
+    for specie in all_species:
+        now = all_means[specie]
+        result.append(now[np.newaxis, :])
+    return np.concatenate(result, axis = 0)
+
+def unpack_all_means(all_means_packed, all_species):
+    result = {}
+    for i in range(len(all_species)):
+        result[all_species[i]] = all_means_packed[i]
+    return result
