@@ -170,22 +170,12 @@ if hypers.USE_DIRECT_TARGETS:
         
         
     if hypers.TARGET_TYPE == "atomic":
-        train_direct_targets = ([structure.arrays[hypers.TARGET_NAME] for structure in train_structures])
-        val_direct_targets = ([structure.arrays[hypers.TARGET_NAME] for structure in val_structures])
+        all_means = get_all_means(hypers, all_species, train_structures)
         
-        train_direct_targets = np.concatenate(train_direct_targets, axis = 0)
-        val_direct_targets = np.concatenate(val_direct_targets, axis = 0)
-        if len(train_direct_targets.shape) == 1:
-            train_direct_targets = train_direct_targets[:, np.newaxis]
-        if len(val_direct_targets.shape) == 1:
-            val_direct_targets = val_direct_targets[:, np.newaxis]
-            
-        all_means = get_all_means(all_species, train_structures)
+        train_direct_targets = get_centered_values(hypers, all_species, all_means, train_structures)
+        val_direct_targets = get_centered_values(hypers, all_species, all_means, val_structures)
         
-        train_direct_targets = get_centered_values(all_species, all_means, train_structures)
-        val_direct_targets = get_centered_values(all_species, all_means, val_structures)
-        
-        np.save(f'results/{NAME_OF_CALCULATION}/all_means.npy', pack_all_means(all_means))
+        np.save(f'results/{NAME_OF_CALCULATION}/all_means.npy', pack_all_means(all_means, all_species))
 
 train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS, hypers.TARGET_GRADS_NAME) for structure in tqdm(train_structures)]
 val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS, hypers.TARGET_GRADS_NAME) for structure in tqdm(val_structures)]
@@ -318,7 +308,8 @@ if hypers.USE_TARGET_GRADS:
     target_grads_mae_model_keeper = ModelKeeper()
 
 if hypers.USE_DIRECT_TARGETS:
-    sliding_direct_targets_rmse = get_rmse(val_direct_targets, np.mean(val_direct_targets))
+    val_direct_targets_conc = np.concatenate(val_direct_targets, axis = 0)
+    sliding_direct_targets_rmse = get_rmse(val_direct_targets_conc, np.mean(val_direct_targets_conc))
     
     direct_targets_rmse_model_keeper = ModelKeeper()
     direct_targets_mae_model_keeper = ModelKeeper()

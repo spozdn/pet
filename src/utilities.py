@@ -160,13 +160,13 @@ def mean_with_nans(array):
     return np.sum(values, axis = 0) / np.sum(mask_present, axis = 0)
     
     
-def get_all_means(all_species, structures):
+def get_all_means(hypers, all_species, structures):
     result = {specie : [] for specie in all_species}
     
     for structure in structures:
         atomic_numbers = structure.get_atomic_numbers()
         targets = structure.arrays[hypers.TARGET_NAME]
-        for index in range(len(atomic_numbers_now)):
+        for index in range(len(atomic_numbers)):
             result[atomic_numbers[index]].append(targets[index])
     
     for specie in all_species:
@@ -177,9 +177,9 @@ def get_all_means(all_species, structures):
             result[specie] = [el[np.newaxis, :] for el in result[specie]]
             result[specie] = np.concatenate(result[specie], axis = 0)
             result[specie] = mean_with_nans(result[specie])
-    return result[specie]
+    return result
 
-def get_centered_values(all_species, all_means, structures):
+def get_centered_values(hypers, all_species, all_means, structures):
     result = []
     for structure in structures:
         current_block = []

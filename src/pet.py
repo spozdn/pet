@@ -440,7 +440,7 @@ class PET(torch.nn.Module):
                                                                                     mask, nums, bond_head, central_species)
        
 
-        if hypers.TARGET_TYPE == 'structural':
+        if self.hypers.TARGET_TYPE == 'structural':
             return torch_geometric.nn.global_add_pool(atomic_predictions,
                                                   batch=batch_dict['batch'])
         else:
@@ -466,7 +466,7 @@ class PET(torch.nn.Module):
         if self.hypers.USE_TARGET_GRADS:
             if hypers.D_TARGET > 1:
                 raise NotImplementedError("not yet for d_model > 1")
-            if hypers.TARGET_TYPE == 'atomic':
+            if self.hypers.TARGET_TYPE == 'atomic':
                raise NotImplementedError("gradients are available only for structural target for now")
                 
             grads  = torch.autograd.grad(predictions, batch.x_initial, grad_outputs = torch.ones_like(predictions),
