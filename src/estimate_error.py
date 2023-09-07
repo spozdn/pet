@@ -81,7 +81,8 @@ structures = ase.io.read(args.structures_path, index = ':')
 
 all_species = np.load(ALL_SPECIES_PATH)
 if hypers.USE_DIRECT_TARGETS:
-    self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
+    if hypers.TARGET_TYPE == 'structural':
+        self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
 
 molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_TARGET_GRADS, hypers.TARGET_GRADS_NAME) for structure in tqdm(structures)]
 max_nums = [molecule.get_max_num() for molecule in molecules]
@@ -120,6 +121,8 @@ if hypers.USE_DIRECT_TARGETS:
     if hypers.TARGET_TYPE == 'atomic':
         direct_targets_ground_truth = ([struc.arrays[hypers.TARGET_NAME] for struc in structures])
         direct_targets_ground_truth = np.concatenate(direct_targets_ground_truth, axis = 0)
+        if len(direct_targets_ground_truth.shape) == 1:
+            direct_targets_ground_truth = direct_targets_ground_truth[:, np.newaxis]
     
 if hypers.USE_TARGET_GRADS:
     target_grads_ground_truth = [struc.arrays[hypers.TARGET_GRADS_NAME] for struc in structures]
@@ -174,7 +177,9 @@ for _ in tqdm(range(args.n_aug)):
 total_time = time.time() - begin
 n_atoms = np.array([len(struc.positions) for struc in structures])
 time_per_atom = total_time / (np.sum(n_atoms) * args.n_aug)
- 
+
+
+
 if hypers.USE_DIRECT_TARGETS:
     all_direct_targets_predicted = [el[np.newaxis] for el in all_direct_targets_predicted]
     all_direct_targets_predicted = np.concatenate(all_direct_targets_predicted, axis = 0)
@@ -197,29 +202,32 @@ if hypers.USE_DIRECT_TARGETS:
         
         direct_targets_predicted_mean = direct_targets_predicted_mean + self_contributions_direct_targets
         
-        mask_nan = np.isnan(direct_targets_ground_truth)
-        direct_targets_ground_truth[mask_nan] = 0.0
-        mask_direct_targets_present = np.ones_like(direct_targets_ground_truth)
-        mask_direct_targets_present[mask_nan] = 0.0
+    mask_nan = np.isnan(direct_targets_ground_truth)
+    direct_targets_ground_truth[mask_nan] = 0.0
+    mask_direct_targets_present = np.ones_like(direct_targets_ground_truth)
+    mask_direct_targets_present[mask_nan] = 0.0
 
     if hypers.TARGET_TYPE == 'atomic':
-        all_means = unpack_all_means(np.load(ALL_SPECIES_PATH), all_species)
+        all_means = unpack_all_means(np.load(ALL_MEANS_PATH), all_species)
+        #print('predicted raw: ', direct_targets_predicted_mean[0:10])
+        #print('all means: ', all_means)
         direct_targets_predicted_mean = add_means(direct_targets_predicted_mean, all_means, all_species, structures)
-        
+        #print('predicted adjusted: ', direct_targets_predicted_mean[0:10])
+        #print('ground truth: ', direct_targets_ground_truth[0:10])
     
     print(f"direct_targets mae per struc: {get_mae(direct_targets_ground_truth, direct_targets_predicted_mean, mask = mask_direct_targets_present)}")
     print(f"direct_targets rmse per struc: {get_rmse(direct_targets_ground_truth, direct_targets_predicted_mean, mask = mask_direct_targets_present)}")
     
-    
-    direct_targets_predicted_mean_per_atom = direct_targets_predicted_mean / n_atoms[:, np.newaxis]
-    direct_targets_ground_truth_per_atom = direct_targets_ground_truth / n_atoms[:, np.newaxis]
-    
-    print(f"direct_targets mae per atom: {get_mae(direct_targets_ground_truth_per_atom, direct_targets_predicted_mean_per_atom, mask = mask_direct_targets_present)}")
-    print(f"direct_targets rmse per atom: {get_rmse(direct_targets_ground_truth_per_atom, direct_targets_predicted_mean_per_atom, mask = mask_direct_targets_present)}")
-    
-    if all_direct_targets_predicted.shape[0] > 1:
-        if args.verbose:
-            print(f"direct_targets rotational discrepancy std per atom: {direct_targets_rotational_std_per_atom}")
+    if hypers.TARGET_TYPE == 'structural':
+        direct_targets_predicted_mean_per_atom = direct_targets_predicted_mean / n_atoms[:, np.newaxis]
+        direct_targets_ground_truth_per_atom = direct_targets_ground_truth / n_atoms[:, np.newaxis]
+        
+        print(f"direct_targets mae per atom: {get_mae(direct_targets_ground_truth_per_atom, direct_targets_predicted_mean_per_atom, mask = mask_direct_targets_present)}")
+        print(f"direct_targets rmse per atom: {get_rmse(direct_targets_ground_truth_per_atom, direct_targets_predicted_mean_per_atom, mask = mask_direct_targets_present)}")
+        
+        if all_direct_targets_predicted.shape[0] > 1:
+            if args.verbose:
+                print(f"direct_targets rotational discrepancy std per atom: {direct_targets_rotational_std_per_atom}")
     
     
 if hypers.USE_TARGET_GRADS:

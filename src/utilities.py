@@ -166,17 +166,19 @@ def get_all_means(hypers, all_species, structures):
     for structure in structures:
         atomic_numbers = structure.get_atomic_numbers()
         targets = structure.arrays[hypers.TARGET_NAME]
+        if len(targets.shape) == 1:
+            targets = targets[:, np.newaxis]
+        
         for index in range(len(atomic_numbers)):
             result[atomic_numbers[index]].append(targets[index])
     
     for specie in all_species:
-        if len(result[specie]) > 0:
-            if len(result[specie]) == 0:
-                raise ValueError(f"specie {specie} is present in the validation dataset but not in the train")
-            
-            result[specie] = [el[np.newaxis, :] for el in result[specie]]
-            result[specie] = np.concatenate(result[specie], axis = 0)
-            result[specie] = mean_with_nans(result[specie])
+        if len(result[specie]) == 0:
+            raise ValueError(f"specie {specie} is present in the validation dataset but not in the train")
+        
+        result[specie] = [el[np.newaxis, :] for el in result[specie]]
+        result[specie] = np.concatenate(result[specie], axis = 0)
+        result[specie] = mean_with_nans(result[specie])
     return result
 
 def get_centered_values(hypers, all_species, all_means, structures):
@@ -185,6 +187,8 @@ def get_centered_values(hypers, all_species, all_means, structures):
         current_block = []
         atomic_numbers = structure.get_atomic_numbers()
         targets = structure.arrays[hypers.TARGET_NAME]
+        if len(targets.shape) == 1:
+            targets = targets[:, np.newaxis]
         for index in range(len(atomic_numbers)):
             now = targets[index] - all_means[atomic_numbers[index]]
             current_block.append(now[np.newaxis, :])
