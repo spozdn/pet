@@ -336,8 +336,13 @@ for epoch in pbar:
         #print(batch.y)
         
         #print("batch y shape: ", batch.y.shape)
+        
         #print("batch y[0]: ", batch.y[0])
         predictions_direct_targets, targets_direct_targets, predictions_target_grads, targets_target_grads = model(batch)
+        if predictions_direct_targets.shape != targets_direct_targets.shape:
+            raise ValueError("Provided target dimensionality doesn't match the real one")
+        #print('predictions direct targets shape: ', predictions_direct_targets.shape)
+        
         if hypers.USE_DIRECT_TARGETS:
             direct_targets_logger.train_logger.update(predictions_direct_targets, targets_direct_targets, batch.mask_direct_target_presents)
             loss_direct_targets = get_loss(predictions_direct_targets, targets_direct_targets, batch.mask_direct_target_presents)
@@ -367,6 +372,9 @@ for epoch in pbar:
             model.module.augmentation = False
             
         predictions_direct_targets, targets_direct_targets, predictions_target_grads, targets_target_grads = model(batch)
+        if predictions_direct_targets.shape != targets_direct_targets.shape:
+            raise ValueError("Provided target dimensionality doesn't match the real one")
+            
         if hypers.USE_DIRECT_TARGETS:
             direct_targets_logger.val_logger.update(predictions_direct_targets, targets_direct_targets, batch.mask_direct_target_presents)
         if hypers.USE_TARGET_GRADS:

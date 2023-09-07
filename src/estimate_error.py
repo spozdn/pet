@@ -161,6 +161,7 @@ for _ in tqdm(range(args.n_aug)):
             model.module.augmentation = True
             
         predictions_direct_targets, targets_direct_targets, predictions_target_grads, targets_target_grads = model(batch)
+        
         if hypers.USE_DIRECT_TARGETS:
             direct_targets_predicted.append(predictions_direct_targets.data.cpu().numpy())
         if hypers.USE_TARGET_GRADS:
@@ -214,7 +215,10 @@ if hypers.USE_DIRECT_TARGETS:
         direct_targets_predicted_mean = add_means(direct_targets_predicted_mean, all_means, all_species, structures)
         #print('predicted adjusted: ', direct_targets_predicted_mean[0:10])
         #print('ground truth: ', direct_targets_ground_truth[0:10])
-    
+
+    if direct_targets_ground_truth.shape != direct_targets_predicted_mean.shape:
+        raise ValueError("Provided target dimensionality doesn't match the real one")
+        
     print(f"direct_targets mae per struc: {get_mae(direct_targets_ground_truth, direct_targets_predicted_mean, mask = mask_direct_targets_present)}")
     print(f"direct_targets rmse per struc: {get_rmse(direct_targets_ground_truth, direct_targets_predicted_mean, mask = mask_direct_targets_present)}")
     
