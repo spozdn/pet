@@ -116,7 +116,10 @@ def get_rotations(indices, global_aug = False):
 def get_loss(predictions, targets, mask_target_presents = None):
     delta = predictions - targets
     if mask_target_presents is not None:
-        return torch.sum(delta * delta * mask_target_presents) / torch.sum(mask_target_presents)
+        if torch.sum(mask_target_presents) < 1e-5:
+            return 0.0
+        else:
+            return torch.sum(delta * delta * mask_target_presents) / torch.sum(mask_target_presents)
     else:
         return torch.mean(delta * delta)
 
@@ -143,6 +146,8 @@ def get_relative_rmse(predictions, targets, mask = None):
     return rmse / get_rmse(mean, targets, mask = None)
 
 def mean_with_nans(array):
+    #print('array shape:', array.shape)
+    #print('array: ', array)
     nan_mask = np.isnan(array)
     non_nan_mask = np.logical_not(nan_mask)
     
@@ -152,12 +157,16 @@ def mean_with_nans(array):
     mask_present = np.ones_like(values)
     mask_present[nan_mask] = 0.0
     
-    denomenator = np.sum(mask_present, axis = 0)
-    print(denomenator)
-    if np.min(denomenator) < 1e-5:
-        raise ValueError("all nans for some target")
-        
-    return np.sum(values, axis = 0) / np.sum(mask_present, axis = 0)
+    numenator = np.sum(values, axis = 0)
+    denominator = np.sum(mask_present, axis = 0)
+    
+    result = np.zeros_like(numenator)
+    for i in range(len(numenator)): # numenator and denumenators are 1d
+        if denominator[i] > 1e-5:
+            result[i] = numenator[i] / denominator[i]
+        else:
+            result[i] = np.nan
+    return result
     
     
 def get_all_means(hypers, all_species, structures):
