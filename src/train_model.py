@@ -134,11 +134,14 @@ def fit_with_nans(X, Y, alpha = 1e-10):
         X_now = X[mask_now]
         y_now_masked = y_now[mask_now]
         if len(y_now_masked) == 0:
-            raise ValueError(f"No data at all for the index {target_index}")
-            
-        rgr_tmp = Ridge(fit_intercept = False, alpha = alpha)
-        rgr_tmp.fit(X_now, y_now_masked)
-        rgr.coef_[target_index] = rgr_tmp.coef_
+            ar = np.empty((X.shape[1]))
+            ar[:] = np.nan
+            rgr.coef_[target_index] = ar
+            #raise ValueError(f"No data at all for the index {target_index}")
+        else:    
+            rgr_tmp = Ridge(fit_intercept = False, alpha = alpha)
+            rgr_tmp.fit(X_now, y_now_masked)
+            rgr.coef_[target_index] = rgr_tmp.coef_
         
     return rgr
 
