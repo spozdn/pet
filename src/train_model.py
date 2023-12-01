@@ -1,4 +1,4 @@
-from utilities import get_all_species, get_compositional_features
+from .utilities import get_all_species, get_compositional_features
 import os
 
 import torch
@@ -13,7 +13,7 @@ from torch_geometric.loader import DataLoader, DataListLoader
 from torch import nn
 import torch.nn.functional as F
 from sklearn.linear_model import Ridge
-from utilities import ModelKeeper
+from .utilities import ModelKeeper
 import time
 from scipy.spatial.transform import Rotation
 from torch.optim.lr_scheduler import LambdaLR
@@ -24,12 +24,12 @@ import yaml
 import random
 from torch_geometric.nn import DataParallel
 
-from molecule import Molecule, batch_to_dict
-from hypers import Hypers
-from pet import PET
-from utilities import FullLogger
-from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
-from analysis import get_structural_batch_size, convert_atomic_throughput
+from .molecule import Molecule, batch_to_dict
+from .hypers import Hypers
+from .pet import PET
+from .utilities import FullLogger
+from .utilities import get_rmse, get_mae, get_relative_rmse, get_loss
+from .analysis import get_structural_batch_size, convert_atomic_throughput
 import argparse
 
 

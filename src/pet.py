@@ -1,4 +1,4 @@
-from utilities import get_all_species, get_compositional_features
+from .utilities import get_all_species, get_compositional_features
 import os
 
 import torch
@@ -20,9 +20,9 @@ from torch.optim.lr_scheduler import StepLR
 import sys
 import copy
 
-from transformer import TransformerLayer, Transformer
-from molecule import batch_to_dict
-from utilities import get_rotations
+from .transformer import TransformerLayer, Transformer
+from .molecule import batch_to_dict
+from .utilities import get_rotations
 
 class CentralSplitter(torch.nn.Module):
     def __init__(self): 

@@ -7,13 +7,15 @@ with open('requirements.txt') as f:
 setup(
     name='pet',
     version='0.0.0',
-    packages=find_packages(),
+    packages=['pet'],
+    package_dir={'pet':'src'},
     entry_points={
         'console_scripts': [
-            'pet_train_model = train_model:main',
-            'pet_estimate_error = estimate_error:main',
-            'pet_estimate_error_sp = estimate_error_sp:main'
+            'pet_train_model = pet.train_model:main',
+            'pet_estimate_error = pet.estimate_error:main',
+            'pet_estimate_error_sp = pet.estimate_error_sp:main'
         ],
     },
     install_requires=requirements,  
 )
+    

@@ -1,4 +1,4 @@
-from utilities import get_all_species, get_compositional_features
+from .utilities import get_all_species, get_compositional_features
 import os
 
 import torch

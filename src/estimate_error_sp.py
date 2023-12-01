@@ -1,4 +1,4 @@
-from utilities import get_all_species, get_compositional_features
+from .utilities import get_all_species, get_compositional_features
 import os
 
 import torch
@@ -23,12 +23,12 @@ import inspect
 import yaml
 from torch_geometric.nn import DataParallel
 
-from molecule import Molecule, batch_to_dict
-from hypers import Hypers
-from pet import PET
-from utilities import FullLogger
-from utilities import get_rmse, get_mae, get_relative_rmse, get_loss
-from analysis import get_structural_batch_size, convert_atomic_throughput
+from .molecule import Molecule, batch_to_dict
+from .hypers import Hypers
+from .pet import PET
+from .utilities import FullLogger
+from .utilities import get_rmse, get_mae, get_relative_rmse, get_loss
+from .analysis import get_structural_batch_size, convert_atomic_throughput
 
 
 from sp_frames_calculator import SPFramesCalculator
