@@ -77,7 +77,6 @@ class SingleStructCalculator():
         graph.y = 0
         graph.forces = np.zeros_like(structure.positions)
         prediction_energy, _, prediction_forces, _ = self.model(graph)
-        print("PET Predictions ", prediction_energy, prediction_forces)
         return prediction_energy.data.cpu().numpy(), prediction_forces.data.cpu().numpy()
         
         
