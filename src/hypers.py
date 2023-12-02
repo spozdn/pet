@@ -2,8 +2,8 @@ import yaml
 import warnings
 import re
 
-def propagate_dublicated_params(provided_hypers, default_hypers, first_key, second_key, check_dublicated):
-    if check_dublicated:
+def propagate_dublicated_params(provided_hypers, default_hypers, first_key, second_key, check_duplicated):
+    if check_duplicated:
         if (first_key in provided_hypers.keys()) and (second_key in provided_hypers.keys()):
             raise ValueError(f"only one of {first_key} and {second_key} should be provided")
 
@@ -27,7 +27,7 @@ def propagate_dublicated_params(provided_hypers, default_hypers, first_key, seco
         
     return output_key, output_value
 
-def combine_hypers(provided_hypers, default_hypers, check_dublicated):    
+def combine_hypers(provided_hypers, default_hypers, check_duplicated):    
     dublicated_params = ['ATOMIC_BATCH_SIZE', 'STRUCTURAL_BATCH_SIZE',
                          'EPOCH_NUM', 'EPOCH_NUM_ATOMIC',
                          'SCHEDULER_STEP_SIZE', 'SCHEDULER_STEP_SIZE_ATOMIC',
@@ -51,20 +51,20 @@ def combine_hypers(provided_hypers, default_hypers, check_dublicated):
    
 
     dubl_key, dubl_value = propagate_dublicated_params(provided_hypers, default_hypers, 'ATOMIC_BATCH_SIZE', 
-                                                         'STRUCTURAL_BATCH_SIZE', check_dublicated)               
+                                                         'STRUCTURAL_BATCH_SIZE', check_duplicated)               
     result[dubl_key] = dubl_value
     
     
     dubl_key, dubl_value = propagate_dublicated_params(provided_hypers, default_hypers, 'EPOCH_NUM', 
-                                                         'EPOCH_NUM_ATOMIC', check_dublicated)               
+                                                         'EPOCH_NUM_ATOMIC', check_duplicated)               
     result[dubl_key] = dubl_value 
     
     dubl_key, dubl_value = propagate_dublicated_params(provided_hypers, default_hypers, 'SCHEDULER_STEP_SIZE', 
-                                                         'SCHEDULER_STEP_SIZE_ATOMIC', check_dublicated)               
+                                                         'SCHEDULER_STEP_SIZE_ATOMIC', check_duplicated)               
     result[dubl_key] = dubl_value  
     
     dubl_key, dubl_value = propagate_dublicated_params(provided_hypers, default_hypers, 'EPOCHS_WARMUP', 
-                                                         'EPOCHS_WARMUP_ATOMIC', check_dublicated)               
+                                                         'EPOCHS_WARMUP_ATOMIC', check_duplicated)               
     result[dubl_key] = dubl_value   
         
         
@@ -125,7 +125,7 @@ class Hypers():
     
             
     
-    def set_from_files(self, path_to_provided_hypers, path_to_default_hypers, check_dublicated = True):
+    def set_from_files(self, path_to_provided_hypers, path_to_default_hypers, check_duplicated = True):
         if self.is_set:
             raise ValueError("Hypers are already set")
             
@@ -149,7 +149,7 @@ class Hypers():
             default_hypers = yaml.load(f, Loader = loader)
             Hypers.fix_Nones_in_yaml(default_hypers)
         
-        combined_hypers = combine_hypers(provided_hypers, default_hypers, check_dublicated)
+        combined_hypers = combine_hypers(provided_hypers, default_hypers, check_duplicated)
         self.set_from_dict(combined_hypers)
         
        

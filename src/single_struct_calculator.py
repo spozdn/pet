@@ -39,7 +39,7 @@ class SingleStructCalculator():
         self_contributions_path = path_to_calc_folder + '/self_contributions.npy'
         
         hypers = Hypers()
-        hypers.set_from_files(hypers_path, default_hypers_path, check_dublicated = False)
+        hypers.set_from_files(hypers_path, default_hypers_path, check_duplicated = False)
         
         all_species = np.load(all_species_path)
         if hypers.USE_ENERGIES:
