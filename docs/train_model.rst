@@ -25,7 +25,7 @@ It is possible to use only energies or only forces for fitting. In this case, on
 
 PET supports both crystalline and finite configurations. 
 
-There is a lot of flexibility in constructing a Point Edge Transformer neural network. In addition, one should specify how the fitting process is performed. This results in a relatively large set of hyperparameters controlling every aspect of architecture and a fitting procedure. The complete list of hypers can be accessed at default/default_hypers.yaml. 
+There is a lot of flexibility in constructing a Point Edge Transformer neural network. In addition, one should specify how the fitting process is performed. This results in a relatively large set of hyperparameters controlling every aspect of architecture and a fitting procedure. The complete list of hypers can be accessed at default_hypers/default_hypers.yaml. 
 
 The good news is that to get good results, one should change only a few hypers from the default values. A user can create a YAML file with only a very few hyperparameters. Next, the training script should be supplied with a user YAML file and a YAML file with default hypers at default_hypers/default_hypers.yaml. It will result in that only hypers specified by a user being changed from the default values. For instance, to launch a calculation where only the cutoff radius differs from the default value, one should create a YAML file with one line "R_CUT: <your_value>" and launch the training script providing it with both this file and default_hypers/default_hypers.yaml.
 

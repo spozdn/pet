@@ -355,7 +355,6 @@ def main():
             if elapsed > hypers.MAX_TIME:
                 break
 
-    import os
     import pickle
     torch.save({
                 'model_state_dict': model.state_dict(),
