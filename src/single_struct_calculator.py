@@ -2,6 +2,8 @@
 import torch
 import numpy as np
 from torch_geometric.nn import DataParallel
+
+from src.utilities import get_compositional_features
 from .molecule import Molecule
 from .hypers import Hypers
 from .pet import PET
@@ -19,7 +21,7 @@ class SingleStructCalculator():
         
         all_species = np.load(all_species_path)
         if hypers.USE_ENERGIES:
-            self_contributions = np.load(self_contributions_path)
+            self.self_contributions = np.load(self_contributions_path)
             
         add_tokens = []
         for _ in range(hypers.N_GNN_LAYERS - 1):
@@ -53,8 +55,9 @@ class SingleStructCalculator():
         graph.y = 0
         graph.forces = np.zeros_like(structure.positions)
         prediction_energy, _, prediction_forces, _ = self.model(graph)
-        return prediction_energy.data.cpu().numpy(), prediction_forces.data.cpu().numpy()
-        
-        
-        
-        
+
+        compositional_features = get_compositional_features([structure], self.all_species)[0]
+        self_contributions_energy = np.dot(compositional_features, self.self_contributions)
+        energy_total = prediction_energy.data.cpu().numpy() + self_contributions_energy
+        return energy_total, prediction_forces.data.cpu().numpy()
+
