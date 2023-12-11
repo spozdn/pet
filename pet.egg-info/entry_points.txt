@@ -1,4 +1,0 @@
-[console_scripts]
-pet_estimate_error = pet.estimate_error:main
-pet_estimate_error_sp = pet.estimate_error_sp:main
-pet_train_model = pet.train_model:main

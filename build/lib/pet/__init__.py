@@ -1,1 +1,0 @@
-from .single_struct_calculator import SingleStructCalculator

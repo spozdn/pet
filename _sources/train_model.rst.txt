@@ -16,7 +16,7 @@ Here :code:`<train_structures_path>` and :code:`<val_structures_path>` are paths
     import ase.io
     structures = ase.io.read(structures_path, index = ':')
     energy_of_the_first_configuration = structures[0].info['energy']
-    forces_of_the_first_configurations = structures[0].info['forces']
+    forces_of_the_first_configurations = structures[0].arrays['forces']
     
     
 Please ensure that the units of energies, forces, and atomic positions are in line with each other. That is, units of forces are units of energies divided by units of atomic positions. 

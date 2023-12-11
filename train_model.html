@@ -95,7 +95,7 @@
 <div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">ase.io</span>
 <span class="n">structures</span> <span class="o">=</span> <span class="n">ase</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">structures_path</span><span class="p">,</span> <span class="n">index</span> <span class="o">=</span> <span class="s1">&#39;:&#39;</span><span class="p">)</span>
 <span class="n">energy_of_the_first_configuration</span> <span class="o">=</span> <span class="n">structures</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;energy&#39;</span><span class="p">]</span>
-<span class="n">forces_of_the_first_configurations</span> <span class="o">=</span> <span class="n">structures</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;forces&#39;</span><span class="p">]</span>
+<span class="n">forces_of_the_first_configurations</span> <span class="o">=</span> <span class="n">structures</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="s1">&#39;forces&#39;</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>Please ensure that the units of energies, forces, and atomic positions are in line with each other. That is, units of forces are units of energies divided by units of atomic positions.</p>
