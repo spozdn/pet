@@ -1,6 +1,5 @@
 import numpy as np
 import math
-import ase.io
 
 def get_structural_batch_size(structures, atomic_batch_size):
     sizes = [len(structure.get_positions()) for structure in structures]

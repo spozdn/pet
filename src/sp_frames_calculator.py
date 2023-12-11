@@ -1,7 +1,6 @@
 from scipy.special import lambertw
 import torch
 import numpy as np
-import sys
 
 
 def smooth_max_weighted(values, weights, beta):
