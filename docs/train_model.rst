@@ -1,11 +1,11 @@
 Train model
 ===========
 
-The script src/train_model.py can be used to fit PET models. The usage is the following:
+After the installation, the command line script :bash:`pet_train` is available, and can be used to fit PET models. The usage is the following:
 
 .. code-block:: bash
 
-   $ python3 train_model.py <train_structures_path>  <val_structures_path> <provided_hypers_path> <default_hypers_path> <name_of_calculation>
+   $ pet_train <train_structures_path>  <val_structures_path> <provided_hypers_path> <default_hypers_path> <name_of_calculation>
        
        
 Here :code:`<train_structures_path>` and :code:`<val_structures_path>` are paths to training and validation datasets. Both datasets should be contained in the xyz files readable by the `Atomic Simulation Environment package <https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.read>`_. Energies should be stored in the :code:`.info` field of the corresponding `Atoms object <https://wiki.fysik.dtu.dk/ase/ase/atoms.html>`_ by the key :code:`energy`. Forces should be stored in the :code:`.arrays` field by the key :code:`forces`. In other words, they should be accessible as:
