@@ -32,6 +32,6 @@ Documentation can be found `here <https://serfg.github.io/pet/>`_.
 References
 ++++++++++
 
-[1] Pozdnyakov, Sergey N., and Michele Ceriotti. "Smooth, exact rotational symmetrization for deep learning on point clouds." arXiv preprint arXiv:2305.19302 (2023).
+[1] Sergey Pozdnyakov, and Michele Ceriotti 2023. Smooth, exact rotational symmetrization for deep learning on point clouds. In Thirty-seventh Conference on Neural Information Processing Systems.
 
 .. inclusion-marker-preambule-end-second
