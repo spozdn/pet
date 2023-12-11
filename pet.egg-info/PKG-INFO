@@ -1,0 +1,12 @@
+Metadata-Version: 2.1
+Name: pet
+Version: 0.0.0
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: ase
+Requires-Dist: pathos
+Requires-Dist: jupyter
+Requires-Dist: scikit-learn
+Requires-Dist: argparse
+Requires-Dist: torch
+Requires-Dist: torch_geometric

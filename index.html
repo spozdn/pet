@@ -89,11 +89,10 @@
 <p>This repository contains an implementation of Point Edge Transformer (PET), interatomic machine learning potential, which achieves state-of-the-art on several datasets; see more details in [1]. PET is a graph neural network where each message-passing layer is given by an arbitrarily deep transformer. Additionally, this repository contains a proof-of-principle implementation of the Equivariant Coordinate System Ensemble (ECSE).</p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Permalink to this heading"></a></h2>
-<ol class="arabic simple">
-<li><p>Run <code class="code highlight bash docutils literal highlight-bash">pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt</code></p></li>
-<li><p>Install <a class="reference external" href="https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html">pytorch-geometric</a> matching your version of CUDA</p></li>
-<li><p>After that three command-line tools are at your disposal - src/train_model.py, src/estimate_error.py, src/estimate_error_sp.py</p></li>
-</ol>
+<p>Run <code class="code highlight bash docutils literal highlight-bash">pip<span class="w"> </span>install<span class="w"> </span>.</code></p>
+<p>After the installation, the following command line scripts are available: <code class="code highlight bash docutils literal highlight-bash">pet_train</code>, <code class="code highlight bash docutils literal highlight-bash">pet_run</code>, and
+<code class="code highlight bash docutils literal highlight-bash">pet_run_sp</code>.</p>
+<p>See the documentation for more details.</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Train model</span></p>
 <ul>
