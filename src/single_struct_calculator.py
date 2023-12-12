@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from torch_geometric.nn import DataParallel
 
-from src.utilities import get_compositional_features
+from .utilities import get_compositional_features
 from .molecule import Molecule
 from .hypers import Hypers
 from .pet import PET
