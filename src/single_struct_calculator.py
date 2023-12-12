@@ -49,7 +49,8 @@ class SingleStructCalculator():
     def forward(self, structure):
         molecule = Molecule(structure, self.hypers.R_CUT, 
                             self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
-                            self.hypers.USE_FORCES)
+                            self.hypers.USE_FORCES,
+                            self.hypers.FORCES_KEY)
         
         graph = molecule.get_graph(molecule.get_max_num(), self.all_species)
         graph.y = 0

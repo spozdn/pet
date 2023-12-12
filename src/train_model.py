@@ -115,8 +115,8 @@ def main():
     print(len(val_structures))
 
     if hypers.USE_ENERGIES:
-        train_energies = np.array([structure.info['energy'] for structure in train_structures])
-        val_energies = np.array([structure.info['energy'] for structure in val_structures])
+        train_energies = np.array([structure.info[hypers.ENERGY_KEY] for structure in train_structures])
+        val_energies = np.array([structure.info[hypers.ENERGY_KEY] for structure in val_structures])
 
         train_c_feat = get_compositional_features(train_structures, all_species)
         val_c_feat = get_compositional_features(val_structures, all_species)
@@ -130,8 +130,8 @@ def main():
         print(np.mean(np.abs(val_energies)))
         np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', rgr.coef_)
 
-    train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES) for structure in tqdm(train_structures)]
-    val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES) for structure in tqdm(val_structures)]
+    train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES, hypers.FORCES_KEY) for structure in tqdm(train_structures)]
+    val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES, hypers.FORCES_KEY) for structure in tqdm(val_structures)]
 
 
     molecules = train_molecules + val_molecules

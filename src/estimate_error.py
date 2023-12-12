@@ -71,7 +71,7 @@ def main():
     if hypers.USE_ENERGIES:
         self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
 
-    molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES) for structure in tqdm(structures)]
+    molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES, hypers.FORCES_KEY) for structure in tqdm(structures)]
     max_nums = [molecule.get_max_num() for molecule in molecules]
     max_num = np.max(max_nums)
     graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)]
@@ -100,10 +100,10 @@ def main():
     model.eval()
 
     if hypers.USE_ENERGIES:
-        energies_ground_truth = np.array([struc.info['energy'] for struc in structures])
+        energies_ground_truth = np.array([struc.info[hypers.ENERGY_KEY] for struc in structures])
 
     if hypers.USE_FORCES:
-        forces_ground_truth = [struc.arrays['forces'] for struc in structures]
+        forces_ground_truth = [struc.arrays[hypers.FORCES_KEY] for struc in structures]
         forces_ground_truth = np.concatenate(forces_ground_truth, axis = 0)
 
 

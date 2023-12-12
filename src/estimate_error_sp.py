@@ -142,12 +142,9 @@ def main():
     self_contributions = self_contributions_main
     all_species = all_species_main
 
-
-
-
     structures = ase.io.read(STRUCTURES_PATH, index = ':')
 
-    molecules = [Molecule(structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA, USE_FORCES) for structure in tqdm(structures)]
+    molecules = [Molecule(structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA, USE_FORCES, hypers_main.FORCES_KEY) for structure in tqdm(structures)]
     max_nums = [molecule.get_max_num() for molecule in molecules]
     max_num = np.max(max_nums)
     graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)]
@@ -157,10 +154,10 @@ def main():
     loader = DataLoader(graphs, 1, shuffle=False)
 
     if USE_ENERGIES:
-        energies_ground_truth = np.array([struc.info['energy'] for struc in structures])
+        energies_ground_truth = np.array([struc.info[hypers_main.ENERGY_KEY] for struc in structures])
 
     if USE_FORCES:
-        forces_ground_truth = [struc.arrays['forces'] for struc in structures]
+        forces_ground_truth = [struc.arrays[hypers_main.FORCES_KEY] for struc in structures]
         forces_ground_truth = np.concatenate(forces_ground_truth, axis = 0)
 
 
