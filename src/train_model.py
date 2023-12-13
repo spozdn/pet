@@ -24,7 +24,6 @@ from .analysis import get_structural_batch_size, convert_atomic_throughput
 import argparse
 
 
-
 def main():
     TIME_SCRIPT_STARTED = time.time()
     parser = argparse.ArgumentParser()
@@ -356,11 +355,11 @@ def main():
         pickle.dump(history, f)
 
     torch.save(model.state_dict(), f'results/{NAME_OF_CALCULATION}/last_model_state_dict')
-    torch.save(model, f'results/{NAME_OF_CALCULATION}/last_model')
+    # torch.save(model, f'results/{NAME_OF_CALCULATION}/last_model')
 
     def save_model(model_name, model_keeper):
         torch.save(model_keeper.best_model.state_dict(), f'results/{NAME_OF_CALCULATION}/{model_name}_state_dict')
-        torch.save(model_keeper.best_model, f'results/{NAME_OF_CALCULATION}/{model_name}')
+        # torch.save(model_keeper.best_model, f'results/{NAME_OF_CALCULATION}/{model_name}')
 
     summary = ''
     if hypers.USE_ENERGIES:    
@@ -388,6 +387,7 @@ def main():
     with open(f"results/{NAME_OF_CALCULATION}/summary.txt", 'w') as f:
         print(summary, file = f)
     
+    print("total elapsed time: ", time.time() - TIME_SCRIPT_STARTED)
 
 if __name__ == "__main__":
     main()
