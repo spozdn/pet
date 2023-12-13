@@ -54,7 +54,7 @@ def main():
 
         # loading default values for the new hypers potentially added into the codebase after the calculation is done
         # assuming that the default values do not change the logic
-        hypers.set_from_files(hypers_path, DEFAULT_HYPERS_PATH, check_dublicated = False)
+        hypers.set_from_files(hypers_path, DEFAULT_HYPERS_PATH, check_duplicated = False)
 
         all_species = np.load(all_species_path)
         if hypers.USE_ENERGIES:

@@ -2,7 +2,7 @@ import yaml
 import warnings
 import re
 
-def propagate_dublicated_params(provided_hypers, default_hypers, first_key, second_key, check_duplicated):
+def propagate_duplicated_params(provided_hypers, default_hypers, first_key, second_key, check_duplicated):
     if check_duplicated:
         if (first_key in provided_hypers.keys()) and (second_key in provided_hypers.keys()):
             raise ValueError(f"only one of {first_key} and {second_key} should be provided")
@@ -28,7 +28,7 @@ def propagate_dublicated_params(provided_hypers, default_hypers, first_key, seco
     return output_key, output_value
 
 def combine_hypers(provided_hypers, default_hypers, check_duplicated):    
-    dublicated_params = ['ATOMIC_BATCH_SIZE', 'STRUCTURAL_BATCH_SIZE',
+    duplicated_params = ['ATOMIC_BATCH_SIZE', 'STRUCTURAL_BATCH_SIZE',
                          'EPOCH_NUM', 'EPOCH_NUM_ATOMIC',
                          'SCHEDULER_STEP_SIZE', 'SCHEDULER_STEP_SIZE_ATOMIC',
                          'EPOCHS_WARMUP', 'EPOCHS_WARMUP_ATOMIC']
@@ -36,36 +36,36 @@ def combine_hypers(provided_hypers, default_hypers, check_duplicated):
     
     for key in provided_hypers.keys():
         if key not in default_hypers.keys():
-            if key not in dublicated_params:                
+            if key not in duplicated_params:                
                 raise ValueError(f"unknown hyper parameter {key}")
     
     result = {}
     
     for key in default_hypers.keys():        
         if key in provided_hypers.keys():
-            if key not in dublicated_params:
+            if key not in duplicated_params:
                 result[key] = provided_hypers[key]
         else:
-            if key not in dublicated_params:
+            if key not in duplicated_params:
                 result[key] = default_hypers[key]
    
 
-    dubl_key, dubl_value = propagate_dublicated_params(provided_hypers, default_hypers, 'ATOMIC_BATCH_SIZE', 
+    dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, 'ATOMIC_BATCH_SIZE', 
                                                          'STRUCTURAL_BATCH_SIZE', check_duplicated)               
-    result[dubl_key] = dubl_value
+    result[dupl_key] = dupl_value
     
     
-    dubl_key, dubl_value = propagate_dublicated_params(provided_hypers, default_hypers, 'EPOCH_NUM', 
+    dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, 'EPOCH_NUM', 
                                                          'EPOCH_NUM_ATOMIC', check_duplicated)               
-    result[dubl_key] = dubl_value 
+    result[dupl_key] = dupl_value 
     
-    dubl_key, dubl_value = propagate_dublicated_params(provided_hypers, default_hypers, 'SCHEDULER_STEP_SIZE', 
+    dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, 'SCHEDULER_STEP_SIZE', 
                                                          'SCHEDULER_STEP_SIZE_ATOMIC', check_duplicated)               
-    result[dubl_key] = dubl_value  
+    result[dupl_key] = dupl_value  
     
-    dubl_key, dubl_value = propagate_dublicated_params(provided_hypers, default_hypers, 'EPOCHS_WARMUP', 
+    dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, 'EPOCHS_WARMUP', 
                                                          'EPOCHS_WARMUP_ATOMIC', check_duplicated)               
-    result[dubl_key] = dubl_value   
+    result[dupl_key] = dupl_value   
         
         
     if (not result['USE_ENERGIES']) and (not result['USE_FORCES']):

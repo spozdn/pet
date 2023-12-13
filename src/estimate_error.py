@@ -51,7 +51,7 @@ def main():
     hypers = Hypers()
     # loading default values for the new hypers potentially added into the codebase after the calculation is done
     # assuming that the default values do not change the logic
-    hypers.set_from_files(HYPERS_PATH, args.default_hypers_path, check_dublicated = False)
+    hypers.set_from_files(HYPERS_PATH, args.default_hypers_path, check_duplicated = False)
 
     torch.manual_seed(hypers.RANDOM_SEED)
     np.random.seed(hypers.RANDOM_SEED)
