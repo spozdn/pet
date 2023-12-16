@@ -1,6 +1,7 @@
 import yaml
 import warnings
 import re
+import inspect
 
 def propagate_duplicated_params(provided_hypers, default_hypers, first_key, second_key, check_duplicated):
     if check_duplicated:
@@ -153,7 +154,19 @@ class Hypers():
         self.set_from_dict(combined_hypers)
         
        
+def save_hypers(hypers, path_save):
+    all_members = inspect.getmembers(hypers, lambda member:not(inspect.isroutine(member)))
+    all_hypers = []
+    for member in all_members:
+        if member[0].startswith('__'):
+            continue
+        if member[0] == 'is_set':
+            continue
+        all_hypers.append(member)
+    all_hypers = {hyper[0] : hyper[1] for hyper in all_hypers}
 
+    with open(path_save, "w") as f:
+        yaml.dump(all_hypers, f)
     
     
    

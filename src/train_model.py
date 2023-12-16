@@ -10,17 +10,15 @@ from sklearn.linear_model import Ridge
 from .utilities import ModelKeeper
 import time
 from torch.optim.lr_scheduler import LambdaLR
-import inspect
-import yaml
 import random
 from torch_geometric.nn import DataParallel
 
 from .molecule import Molecule
-from .hypers import Hypers
+from .hypers import Hypers, save_hypers
 from .pet import PET
 from .utilities import FullLogger
-from .utilities import get_rmse, get_loss
-from .analysis import get_structural_batch_size, convert_atomic_throughput
+from .utilities import get_rmse, get_loss, set_reproducibility, get_calc_names
+from .analysis import adapt_hypers
 import argparse
 
 
@@ -39,38 +37,10 @@ def main():
 
     hypers = Hypers()
     hypers.set_from_files(args.provided_hypers_path, args.default_hypers_path)
-
-    #TRAIN_STRUCTURES = '../experiments/hme21_iteration_3/hme21_train.xyz'
-    #VAL_STRUCTURES = '../experiments/hme21_iteration_3/hme21_val.xyz'
-
-    torch.manual_seed(hypers.RANDOM_SEED)
-    np.random.seed(hypers.RANDOM_SEED)
-    random.seed(hypers.RANDOM_SEED)
-    os.environ['PYTHONHASHSEED'] = str(hypers.RANDOM_SEED)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(hypers.RANDOM_SEED)
-        torch.cuda.manual_seed_all(hypers.RANDOM_SEED)
-
-    if hypers.CUDA_DETERMINISTIC and torch.cuda.is_available():
-        torch.use_deterministic_algorithms(True)
-        torch.backends.cudnn.benchmark = False
-        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    set_reproducibility(hypers.RANDOM_SEED, hypers.CUDA_DETERMINISTIC)
 
     train_structures = ase.io.read(args.train_structures_path, index = ':')
-
-
-    if 'STRUCTURAL_BATCH_SIZE' not in hypers.__dict__.keys():
-        hypers.STRUCTURAL_BATCH_SIZE = get_structural_batch_size(train_structures, hypers.ATOMIC_BATCH_SIZE)
-
-    if 'EPOCH_NUM' not in hypers.__dict__.keys():
-        hypers.EPOCH_NUM = convert_atomic_throughput(train_structures, hypers.EPOCH_NUM_ATOMIC)
-
-    if 'SCHEDULER_STEP_SIZE' not in hypers.__dict__.keys():
-        hypers.SCHEDULER_STEP_SIZE = convert_atomic_throughput(train_structures, hypers.SCHEDULER_STEP_SIZE_ATOMIC)
-
-    if 'EPOCHS_WARMUP' not in hypers.__dict__.keys():
-        hypers.EPOCHS_WARMUP = convert_atomic_throughput(train_structures, hypers.EPOCHS_WARMUP_ATOMIC)
-
+    adapt_hypers(hypers, train_structures)
 
     val_structures = ase.io.read(args.val_structures_path, index = ':')
     structures = train_structures + val_structures 
@@ -78,37 +48,12 @@ def main():
 
     if 'results' not in os.listdir('.'):
         os.mkdir('results')
-    results = os.listdir('results')
-    name_to_load = None
-    NAME_OF_CALCULATION = args.name_of_calculation
-    if NAME_OF_CALCULATION in results:
-        name_to_load = NAME_OF_CALCULATION
-        for i in range(100000):
-            name_now = NAME_OF_CALCULATION + f'_continuation_{i}'
-            if name_now not in results:
-                name_to_save = name_now
-                break
-            name_to_load = name_now   
-        NAME_OF_CALCULATION = name_to_save
-
-
+    
+    name_to_load, NAME_OF_CALCULATION = get_calc_names(os.listdir('results'), args.name_of_calculation)
 
     os.mkdir(f'results/{NAME_OF_CALCULATION}')
-
     np.save(f'results/{NAME_OF_CALCULATION}/all_species.npy', all_species)
-
-    all_members = inspect.getmembers(hypers, lambda member:not(inspect.isroutine(member)))
-    all_hypers = []
-    for member in all_members:
-        if member[0].startswith('__'):
-            continue
-        if member[0] == 'is_set':
-            continue
-        all_hypers.append(member)
-    all_hypers = {hyper[0] : hyper[1] for hyper in all_hypers}
-
-    with open(f"results/{NAME_OF_CALCULATION}/hypers_used.yaml", "w") as f:
-        yaml.dump(all_hypers, f)
+    save_hypers(hypers, f"results/{NAME_OF_CALCULATION}/hypers_used.yaml")
 
     print(len(train_structures))
     print(len(val_structures))

@@ -12,7 +12,7 @@ import random
 from .molecule import Molecule
 from .hypers import Hypers
 from .pet import PET
-from .utilities import get_rmse, get_mae
+from .utilities import get_rmse, get_mae, set_reproducibility
 import argparse
 
 def main():
@@ -53,13 +53,7 @@ def main():
     # assuming that the default values do not change the logic
     hypers.set_from_files(HYPERS_PATH, args.default_hypers_path, check_duplicated = False)
 
-    torch.manual_seed(hypers.RANDOM_SEED)
-    np.random.seed(hypers.RANDOM_SEED)
-    random.seed(hypers.RANDOM_SEED)
-    os.environ['PYTHONHASHSEED'] = str(hypers.RANDOM_SEED)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(hypers.RANDOM_SEED)
-        torch.cuda.manual_seed_all(hypers.RANDOM_SEED)
+    set_reproducibility(hypers.RANDOM_SEED, hypers.CUDA_DETERMINISTIC)
 
     if args.batch_size == -1:
         args.batch_size = hypers.STRUCTURAL_BATCH_SIZE
