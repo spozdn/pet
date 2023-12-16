@@ -114,3 +114,12 @@ def test_single_struct_calculator(prepare_model):
     energy, forces = single_struct_calculator.forward(structure)
 
     assert forces.shape == (5, 3), "single_struct_calculator failed"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def run_at_the_end(request):
+    """
+    Register a finalizer to clean the temporarily files
+    at the end of the test session.
+    """
+    request.addfinalizer(clean)
