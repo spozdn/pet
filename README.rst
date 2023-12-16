@@ -28,6 +28,13 @@ Documentation
 Documentation can be found `here <https://serfg.github.io/pet/>`_.
    
 .. inclusion-marker-preambule-start-second
+
++++++
+Tests
++++++
+
+:bash:`cd tests && pytest .`
+
 ++++++++++
 References
 ++++++++++
