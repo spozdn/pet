@@ -6,7 +6,6 @@ import ase.io
 import numpy as np
 from tqdm import tqdm
 from torch_geometric.loader import DataLoader, DataListLoader
-from sklearn.linear_model import Ridge
 from .utilities import ModelKeeper
 import time
 from torch.optim.lr_scheduler import LambdaLR
@@ -19,6 +18,7 @@ from .pet import PET
 from .utilities import FullLogger
 from .utilities import get_rmse, get_loss, set_reproducibility, get_calc_names
 from .analysis import adapt_hypers
+from .utilities import get_self_contributions, get_corrected_energies
 import argparse
 
 
@@ -59,20 +59,12 @@ def main():
     print(len(val_structures))
 
     if hypers.USE_ENERGIES:
-        train_energies = np.array([structure.info[hypers.ENERGY_KEY] for structure in train_structures])
-        val_energies = np.array([structure.info[hypers.ENERGY_KEY] for structure in val_structures])
+        self_contributions = get_self_contributions(hypers.ENERGY_KEY, train_structures, all_species)
+        np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', self_contributions)
 
-        train_c_feat = get_compositional_features(train_structures, all_species)
-        val_c_feat = get_compositional_features(val_structures, all_species)
-        print(train_c_feat.shape)
-
-        print(np.mean(np.abs(val_energies)))
-        rgr = Ridge(alpha = 1e-10, fit_intercept = False)
-        rgr.fit(train_c_feat, train_energies)
-        train_energies -= rgr.predict(train_c_feat)
-        val_energies -= rgr.predict(val_c_feat)
-        print(np.mean(np.abs(val_energies)))
-        np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', rgr.coef_)
+        train_energies = get_corrected_energies(hypers.ENERGY_KEY, train_structures, all_species, self_contributions)
+        val_energies = get_corrected_energies(hypers.ENERGY_KEY, val_structures, all_species, self_contributions)
+      
 
     train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES, hypers.FORCES_KEY) for structure in tqdm(train_structures)]
     val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES, hypers.FORCES_KEY) for structure in tqdm(val_structures)]
@@ -82,10 +74,7 @@ def main():
     max_nums = [molecule.get_max_num() for molecule in molecules]
     max_num = np.max(max_nums)
     print(max_num)
-
-    central_species = [molecule.central_species for molecule in molecules]
-    central_species = np.concatenate(central_species, axis = 0)
-
+    
     train_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(train_molecules)]
     val_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(val_molecules)]
 
@@ -128,9 +117,7 @@ def main():
     if hypers.MULTI_GPU and torch.cuda.is_available():
         model = DataParallel(model)
         model = model.to(torch.device('cuda:0'))
-
-
-    import copy
+    
     optim = torch.optim.Adam(model.parameters(), lr = hypers.INITIAL_LR)
 
     def func_lr_scheduler(epoch):

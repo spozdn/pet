@@ -3,8 +3,26 @@ import random
 import torch
 import numpy as np
 
+from sklearn.linear_model import Ridge
 from scipy.spatial.transform import Rotation
 import copy
+
+def get_self_contributions(energy_key, train_structures, all_species):
+    train_energies = np.array([structure.info[energy_key] for structure in train_structures])
+    train_c_feat = get_compositional_features(train_structures, all_species)
+    rgr = Ridge(alpha = 1e-10, fit_intercept = False)
+    rgr.fit(train_c_feat, train_energies)
+    return rgr.coef_
+
+def get_corrected_energies(energy_key, structures, all_species, self_contributions):
+    energies = np.array([structure.info[energy_key] for structure in structures])
+
+    compositional_features = get_compositional_features(structures, all_species)
+    self_contributions_energies = []
+    for i in range(len(structures)):
+        self_contributions_energies.append(np.dot(compositional_features[i], self_contributions))
+    self_contributions_energies = np.array(self_contributions_energies)
+    return energies - self_contributions_energies
 
 
 def get_calc_names(all_completed_calcs, current_name):
