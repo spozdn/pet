@@ -11,7 +11,7 @@ from torch_geometric.nn import DataParallel
 from .molecule import Molecule
 from .hypers import Hypers
 from .pet import PET
-from .utilities import get_rmse, get_mae
+from .data_preparation import get_rmse, get_mae
 
 
 from sp_frames_calculator import SPFramesCalculator

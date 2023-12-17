@@ -1,5 +1,4 @@
-from .utilities import get_compositional_features
-import os
+
 
 import torch
 import ase.io
@@ -8,12 +7,14 @@ from tqdm import tqdm
 from torch_geometric.loader import DataLoader, DataListLoader
 import time
 from torch_geometric.nn import DataParallel
-import random
-from .molecule import Molecule
+
+
 from .hypers import Hypers
 from .pet import PET
 from .utilities import get_rmse, get_mae, set_reproducibility
 import argparse
+from .data_preparation import get_pyg_graphs, get_compositional_features
+from .data_preparation import update_pyg_graphs, get_forces
 
 def main():
     parser = argparse.ArgumentParser()
@@ -58,17 +59,15 @@ def main():
     if args.batch_size == -1:
         args.batch_size = hypers.STRUCTURAL_BATCH_SIZE
 
-
     structures = ase.io.read(args.structures_path, index = ':')
 
     all_species = np.load(ALL_SPECIES_PATH)
     if hypers.USE_ENERGIES:
         self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
 
-    molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES, hypers.FORCES_KEY) for structure in tqdm(structures)]
-    max_nums = [molecule.get_max_num() for molecule in molecules]
-    max_num = np.max(max_nums)
-    graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)]
+    graphs = get_pyg_graphs(structures, all_species, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+    forces = get_forces(structures, hypers.FORCES_KEY)
+    update_pyg_graphs(graphs, 'forces', forces)
 
     if hypers.MULTI_GPU:
         loader = DataListLoader(graphs, batch_size=args.batch_size, shuffle=False)

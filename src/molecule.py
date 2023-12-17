@@ -6,13 +6,13 @@ from torch_geometric.data import Data
 
 
 class Molecule():
-    def __init__(self, atoms, r_cut, use_additional_scalar_attributes, use_forces, forces_key):
+    def __init__(self, atoms, r_cut, use_additional_scalar_attributes):
         
         self.use_additional_scalar_attributes = use_additional_scalar_attributes
-        self.use_forces = use_forces
+        
         
         self.atoms = atoms
-        self.forces_key = forces_key
+        
 
         positions = self.atoms.get_positions()
         species = self.atoms.get_atomic_numbers()
@@ -124,9 +124,6 @@ class Molecule():
                   'neighbors_index' : neighbors_index.transpose(0, 1),
                   'nums' : nums,
                   'mask' : mask}
-        
-        if self.use_forces:
-            kwargs['forces'] = torch.FloatTensor(self.atoms.arrays[self.forces_key])
         
         if self.use_additional_scalar_attributes:
             kwargs['neighbor_scalar_attributes'] = torch.FloatTensor(neighbor_scalar_attributes)

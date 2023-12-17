@@ -1,4 +1,4 @@
-from .utilities import get_all_species, get_compositional_features
+from .data_preparation import get_all_species
 import os
 
 import torch
@@ -12,15 +12,14 @@ from torch.optim.lr_scheduler import LambdaLR
 import random
 from torch_geometric.nn import DataParallel
 
-from .molecule import Molecule
 from .hypers import Hypers, save_hypers
 from .pet import PET
 from .utilities import FullLogger
 from .utilities import get_rmse, get_loss, set_reproducibility, get_calc_names
 from .analysis import adapt_hypers
-from .utilities import get_self_contributions, get_corrected_energies
+from .data_preparation import get_self_contributions, get_corrected_energies
 import argparse
-
+from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_forces
 
 def main():
     TIME_SCRIPT_STARTED = time.time()
@@ -58,34 +57,25 @@ def main():
     print(len(train_structures))
     print(len(val_structures))
 
+    train_graphs = get_pyg_graphs(train_structures, all_species, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+    val_graphs = get_pyg_graphs(val_structures, all_species, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+
     if hypers.USE_ENERGIES:
         self_contributions = get_self_contributions(hypers.ENERGY_KEY, train_structures, all_species)
         np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', self_contributions)
 
         train_energies = get_corrected_energies(hypers.ENERGY_KEY, train_structures, all_species, self_contributions)
         val_energies = get_corrected_energies(hypers.ENERGY_KEY, val_structures, all_species, self_contributions)
-      
 
-    train_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES, hypers.FORCES_KEY) for structure in tqdm(train_structures)]
-    val_molecules = [Molecule(structure, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES, hypers.USE_FORCES, hypers.FORCES_KEY) for structure in tqdm(val_structures)]
+        update_pyg_graphs(train_graphs, 'y', train_energies)
+        update_pyg_graphs(val_graphs, 'y', val_energies)
 
+    if hypers.USE_FORCES:
+        train_forces = get_forces(train_structures, hypers.FORCES_KEY)
+        val_forces = get_forces(val_structures, hypers.FORCES_KEY)
 
-    molecules = train_molecules + val_molecules
-    max_nums = [molecule.get_max_num() for molecule in molecules]
-    max_num = np.max(max_nums)
-    print(max_num)
-    
-    train_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(train_molecules)]
-    val_graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(val_molecules)]
-
-
-    if hypers.USE_ENERGIES:
-        for index in range(len(train_structures)):
-            train_graphs[index].y = train_energies[index]
-
-        for index in range(len(val_structures)):
-            val_graphs[index].y = val_energies[index]
-
+        update_pyg_graphs(train_graphs, 'forces', train_forces)
+        update_pyg_graphs(val_graphs, 'forces', val_forces)
 
 
     def seed_worker(worker_id):

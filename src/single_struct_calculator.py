@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from torch_geometric.nn import DataParallel
 
-from .utilities import get_compositional_features
+from .data_preparation import get_compositional_features
 from .molecule import Molecule
 from .hypers import Hypers
 from .pet import PET
@@ -48,9 +48,7 @@ class SingleStructCalculator():
         
     def forward(self, structure):
         molecule = Molecule(structure, self.hypers.R_CUT, 
-                            self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
-                            self.hypers.USE_FORCES,
-                            self.hypers.FORCES_KEY)
+                            self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
         
         graph = molecule.get_graph(molecule.get_max_num(), self.all_species)
         graph.y = 0

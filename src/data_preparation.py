@@ -1,0 +1,71 @@
+import numpy as np
+from sklearn.linear_model import Ridge
+from tqdm import tqdm
+from .molecule import Molecule
+import torch
+
+def get_all_species(structures):
+    all_species = []
+    for structure in structures:
+        all_species.append(np.array(structure.get_atomic_numbers()))
+    all_species = np.concatenate(all_species, axis=0)
+    all_species = np.sort(np.unique(all_species))
+    return all_species
+
+def get_forces(structures, FORCES_KEY):
+    forces = []
+    for structure in structures:
+        forces.append(torch.FloatTensor(structure.arrays[FORCES_KEY]))
+    return forces
+
+
+def update_pyg_graphs(pyg_graphs, key, values):
+    for index in range(len(pyg_graphs)):
+        pyg_graphs[index].update({key: values[index]})
+
+
+def get_pyg_graphs(structures, all_species, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES):
+    molecules = [
+        Molecule(structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+        for structure in tqdm(structures)
+    ]
+
+    max_nums = [molecule.get_max_num() for molecule in molecules]
+    max_num = np.max(max_nums)
+    pyg_graphs = [
+        molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)
+    ]
+    return pyg_graphs
+
+
+def get_compositional_features(structures, all_species):
+    result = np.zeros([len(structures), len(all_species)])
+    for i, structure in enumerate(structures):
+        species_now = structure.get_atomic_numbers()
+        for j, specie in enumerate(all_species):
+            num = np.sum(species_now == specie)
+            result[i, j] = num
+    return result
+
+
+def get_self_contributions(energy_key, train_structures, all_species):
+    train_energies = np.array(
+        [structure.info[energy_key] for structure in train_structures]
+    )
+    train_c_feat = get_compositional_features(train_structures, all_species)
+    rgr = Ridge(alpha=1e-10, fit_intercept=False)
+    rgr.fit(train_c_feat, train_energies)
+    return rgr.coef_
+
+
+def get_corrected_energies(energy_key, structures, all_species, self_contributions):
+    energies = np.array([structure.info[energy_key] for structure in structures])
+
+    compositional_features = get_compositional_features(structures, all_species)
+    self_contributions_energies = []
+    for i in range(len(structures)):
+        self_contributions_energies.append(
+            np.dot(compositional_features[i], self_contributions)
+        )
+    self_contributions_energies = np.array(self_contributions_energies)
+    return energies - self_contributions_energies
