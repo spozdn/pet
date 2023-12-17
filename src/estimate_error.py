@@ -10,7 +10,7 @@ from torch_geometric.nn import DataParallel
 
 
 from .hypers import Hypers
-from .pet import PET
+from .pet import PET, PETMLIPWrapper
 from .utilities import get_rmse, get_mae, set_reproducibility
 import argparse
 from .data_preparation import get_pyg_graphs, get_compositional_features
@@ -85,6 +85,8 @@ def main():
                            hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
                            add_tokens).to(device)
 
+    model = PETMLIPWrapper(model, hypers)
+
     if hypers.MULTI_GPU and torch.cuda.is_available():
         model = DataParallel(model)
         model = model.to( torch.device('cuda:0'))
@@ -111,11 +113,8 @@ def main():
     for batch in loader:
         if not hypers.MULTI_GPU:
             batch.to(device)
-            model.augmentation = USE_AUGMENTATION
-        else:
-            model.module.augmentation = USE_AUGMENTATION
 
-        predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
+        predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
         break
 
     begin = time.time()
@@ -128,11 +127,8 @@ def main():
         for batch in loader:
             if not hypers.MULTI_GPU:
                 batch.to(device)
-                model.augmentation = USE_AUGMENTATION
-            else:
-                model.module.augmentation = USE_AUGMENTATION
 
-            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
+            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
             if hypers.USE_ENERGIES:
                 energies_predicted.append(predictions_energies.data.cpu().numpy())
             if hypers.USE_FORCES:

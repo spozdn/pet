@@ -6,7 +6,7 @@ from torch_geometric.nn import DataParallel
 from .data_preparation import get_compositional_features
 from .molecule import Molecule
 from .hypers import Hypers
-from .pet import PET
+from .pet import PET, PETMLIPWrapper
 
 
 class SingleStructCalculator():
@@ -33,7 +33,7 @@ class SingleStructCalculator():
                                0.0, len(all_species), 
                                hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
                                add_tokens).to(device)
-
+        model = PETMLIPWrapper(model, hypers)
         if hypers.MULTI_GPU and torch.cuda.is_available():
             model = DataParallel(model)
             model = model.to( torch.device('cuda:0'))
@@ -44,7 +44,7 @@ class SingleStructCalculator():
         self.model = model
         self.hypers = hypers
         self.all_species = all_species
-        self.model.augmentation = False
+        
         
     def forward(self, structure):
         molecule = Molecule(structure, self.hypers.R_CUT, 
@@ -53,7 +53,7 @@ class SingleStructCalculator():
         graph = molecule.get_graph(molecule.get_max_num(), self.all_species)
         graph.y = 0
         graph.forces = np.zeros_like(structure.positions)
-        prediction_energy, _, prediction_forces, _ = self.model(graph)
+        prediction_energy, _, prediction_forces, _ = self.model(graph, augmentation = False, create_graph = False)
 
         compositional_features = get_compositional_features([structure], self.all_species)[0]
         self_contributions_energy = np.dot(compositional_features, self.self_contributions)

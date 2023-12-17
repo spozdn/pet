@@ -13,7 +13,7 @@ import random
 from torch_geometric.nn import DataParallel
 
 from .hypers import Hypers, save_hypers
-from .pet import PET
+from .pet import PET, PETMLIPWrapper
 from .utilities import FullLogger
 from .utilities import get_rmse, get_loss, set_reproducibility, get_calc_names
 from .analysis import adapt_hypers
@@ -104,6 +104,7 @@ def main():
                            hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
                            add_tokens).to(device)
 
+    model = PETMLIPWrapper(model, hypers)
     if hypers.MULTI_GPU and torch.cuda.is_available():
         model = DataParallel(model)
         model = model.to(torch.device('cuda:0'))
@@ -146,11 +147,9 @@ def main():
         for batch in val_loader:
             if not hypers.MULTI_GPU:
                 batch.to(device)
-                model.augmentation = False
-            else:
-                model.module.augmentation = False
+                
 
-            _, _, _, targets_forces = model(batch)
+            _, _, _, targets_forces = model(batch, augmentation = False, create_graph = False)
             all_val_forces.append(targets_forces.data.cpu().numpy())
         all_val_forces = np.concatenate(all_val_forces, axis = 0)
 
@@ -181,11 +180,8 @@ def main():
         for batch in train_loader:
             if not hypers.MULTI_GPU:
                 batch.to(device)
-                model.augmentation = True
-            else:
-                model.module.augmentation = True
 
-            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
+            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = True, create_graph = True)
             if hypers.USE_ENERGIES:
                 energies_logger.train_logger.update(predictions_energies, targets_energies)
                 loss_energies = get_loss(predictions_energies, targets_energies)
@@ -210,11 +206,8 @@ def main():
         for batch in val_loader:
             if not hypers.MULTI_GPU:
                 batch.to(device)
-                model.augmentation = False
-            else:
-                model.module.augmentation = False
 
-            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch)
+            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = False, create_graph = False)
             if hypers.USE_ENERGIES:
                 energies_logger.val_logger.update(predictions_energies, targets_energies)
             if hypers.USE_FORCES:

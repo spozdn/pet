@@ -287,7 +287,6 @@ class PET(torch.nn.Module):
                        heads_central_specific, add_central_tokens):
         super(PET, self).__init__()
         self.hypers = hypers
-        self.task = 'both'
         self.embedding = nn.Embedding(n_atomic_species + 1, transformer_d_model)
             
         gnn_layers = []
@@ -378,9 +377,7 @@ class PET(torch.nn.Module):
                                      'central_species' : central_species})['atomic_energies']
         return predictions
         
-    def forward(self, batch):
-        if self.task == 'both':
-            return self.get_targets(batch)
+    def get_predictions(self, batch):
         batch_dict = batch_to_dict(batch)
         
         
@@ -427,27 +424,32 @@ class PET(torch.nn.Module):
         
         return torch_geometric.nn.global_add_pool(atomic_energies[:, None],
                                                   batch=batch_dict['batch'])[:, 0]
-    
-    def get_targets(self, batch):
-        #print(self.augmentation)
-        if self.augmentation:
-            #print("here")
+    def forward(self, batch, augmentation):
+        if augmentation:
             indices = batch.batch.cpu().data.numpy()
             rotations = torch.FloatTensor(get_rotations(indices, global_aug = self.hypers.GLOBAL_AUG)).to(batch.x.device)
-            batch.x_initial = batch.x.clone().detach()
-            batch.x_initial.requires_grad = True
-            batch.x = torch.bmm(batch.x_initial, rotations)
+            x_initial = batch.x
+            batch.x = torch.bmm(x_initial, rotations)
+            predictions = self.get_predictions(batch)
+            batch.x = x_initial
+            return predictions
         else:
-            batch.x_initial = batch.x.clone().detach()
-            batch.x_initial.requires_grad = True
-            batch.x = batch.x_initial
+            return self.get_predictions(batch)
+    
+
+class PETMLIPWrapper(torch.nn.Module):
+    def __init__(self, model, hypers):
+        super(PETMLIPWrapper, self).__init__()
+        self.model = model
+        self.hypers = hypers
+    
+    def forward(self, batch, augmentation, create_graph):
         
-        self.task = 'energies'
-        predictions = self(batch)
-        self.task = 'both'
         if self.hypers.USE_FORCES:
-            grads  = torch.autograd.grad(predictions, batch.x_initial, grad_outputs = torch.ones_like(predictions),
-                                    create_graph = True)[0]
+            batch.x.requires_grad = True
+            predictions = self.model(batch, augmentation = augmentation)
+            grads  = torch.autograd.grad(predictions, batch.x, grad_outputs = torch.ones_like(predictions),
+                                    create_graph = create_graph)[0]
             neighbors_index = batch.neighbors_index.transpose(0, 1)
             neighbors_pos = batch.neighbors_pos
             grads_messaged = grads[neighbors_index, neighbors_pos]
@@ -455,7 +457,9 @@ class PET(torch.nn.Module):
             first = grads.sum(dim = 1)
             grads_messaged[batch.mask] = 0.0
             second = grads_messaged.sum(dim = 1)
-        
+        else:
+            predictions = self.model(batch, augmentation = augmentation)
+
         result = []
         if self.hypers.USE_ENERGIES:
             result.append(predictions)
@@ -472,5 +476,3 @@ class PET(torch.nn.Module):
             result.append(None)
             
         return result
-    
-    
