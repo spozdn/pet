@@ -5,18 +5,18 @@ from torch_geometric.nn import DataParallel
 
 from .data_preparation import get_compositional_features
 from .molecule import Molecule
-from .hypers import set_hypers_from_files
+from .hypers import load_hypers_from_file
 from .pet import PET, PETMLIPWrapper
 
 
 class SingleStructCalculator():
-    def __init__(self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", default_hypers_path="default_hypers.yaml", device="cpu"): 
+    def __init__(self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu"): 
         hypers_path = path_to_calc_folder + '/hypers_used.yaml'
         path_to_model_state_dict = path_to_calc_folder + '/' + checkpoint + '_state_dict'
         all_species_path = path_to_calc_folder + '/all_species.npy'
         self_contributions_path = path_to_calc_folder + '/self_contributions.npy'
         
-        hypers = set_hypers_from_files(hypers_path, default_hypers_path, check_duplicated = False)
+        hypers = load_hypers_from_file(hypers_path)
         
         MLIP_SETTINGS = hypers.MLIP_SETTINGS
         ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS

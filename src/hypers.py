@@ -3,13 +3,13 @@ import warnings
 import re
 import inspect
 
-def propagate_duplicated_params(provided_hypers, default_hypers, first_key, second_key, check_duplicated):
-    if check_duplicated:
-        if (first_key in provided_hypers.keys()) and (second_key in provided_hypers.keys()):
-            raise ValueError(f"only one of {first_key} and {second_key} should be provided")
+def propagate_duplicated_params(provided_hypers, default_hypers, first_key, second_key):
+   
+    if (first_key in provided_hypers.keys()) and (second_key in provided_hypers.keys()):
+        raise ValueError(f"only one of {first_key} and {second_key} should be provided")
 
-        if (first_key in default_hypers.keys()) and (second_key in default_hypers.keys()):
-            raise ValueError(f"only one of {first_key} and {second_key} should be in default hypers")
+    if (first_key in default_hypers.keys()) and (second_key in default_hypers.keys()):
+        raise ValueError(f"only one of {first_key} and {second_key} should be in default hypers")
 
     output_key, output_value = None, None
     for key in [first_key, second_key]:
@@ -34,7 +34,7 @@ def check_is_shallow(hypers):
             raise ValueError("Nesting of more than two is not supported")
         
     
-def combine_hypers(provided_hypers, default_hypers, check_duplicated):
+def combine_hypers(provided_hypers, default_hypers):
     group_keys = ['ARCHITECTURAL_HYPERS', 'FITTING_SCHEME', 'MLIP_SETTINGS']
     for key in provided_hypers.keys():
         if key not in group_keys:
@@ -58,7 +58,7 @@ def combine_hypers(provided_hypers, default_hypers, check_duplicated):
                          ['EPOCHS_WARMUP', 'EPOCHS_WARMUP_ATOMIC']]
         else:
             duplicated_params = []
-        result[key] = combine_hypers_shallow(provided_now, default_now, check_duplicated,
+        result[key] = combine_hypers_shallow(provided_now, default_now,
                                               duplicated_params)
     
     
@@ -75,7 +75,7 @@ def combine_hypers(provided_hypers, default_hypers, check_duplicated):
         
     return result
 
-def combine_hypers_shallow(provided_hypers, default_hypers, check_duplicated,
+def combine_hypers_shallow(provided_hypers, default_hypers,
                             duplicated_params):  
     check_is_shallow(provided_hypers)
     check_is_shallow(default_hypers)  
@@ -102,7 +102,7 @@ def combine_hypers_shallow(provided_hypers, default_hypers, check_duplicated,
    
 
     for el in duplicated_params:
-        dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, el[0], el[1], check_duplicated)               
+        dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, el[0], el[1])               
         result[dupl_key] = dupl_value
          
     return result
@@ -145,7 +145,7 @@ def load_hypers_from_file(path_to_hypers):
              
     
 def set_hypers_from_files(path_to_provided_hypers,
-                           path_to_default_hypers, check_duplicated = True):
+                           path_to_default_hypers):
    
         
     loader = yaml.SafeLoader
@@ -168,7 +168,7 @@ def set_hypers_from_files(path_to_provided_hypers,
         default_hypers = yaml.load(f, Loader = loader)
         fix_Nones_in_yaml(default_hypers)
     
-    combined_hypers = combine_hypers(provided_hypers, default_hypers, check_duplicated)
+    combined_hypers = combine_hypers(provided_hypers, default_hypers)
     return Hypers(combined_hypers)
         
 

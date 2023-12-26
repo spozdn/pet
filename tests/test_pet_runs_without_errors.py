@@ -108,7 +108,7 @@ def test_single_struct_calculator(prepare_model):
     """
     model_folder = prepare_model
     single_struct_calculator = SingleStructCalculator(
-        model_folder, default_hypers_path="../default_hypers/default_hypers.yaml"
+        model_folder,
     )
     structure = ase.io.read("../example/methane_test.xyz", index=0)
     energy, forces = single_struct_calculator.forward(structure)

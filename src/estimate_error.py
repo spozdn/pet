@@ -9,7 +9,7 @@ import time
 from torch_geometric.nn import DataParallel
 
 
-from .hypers import set_hypers_from_files
+from .hypers import load_hypers_from_file
 from .pet import PET, PETMLIPWrapper
 from .utilities import get_rmse, get_mae, set_reproducibility
 import argparse
@@ -51,7 +51,7 @@ def main():
 
     # loading default values for the new hypers potentially added into the codebase after the calculation is done
     # assuming that the default values do not change the logic
-    hypers = set_hypers_from_files(HYPERS_PATH, args.default_hypers_path, check_duplicated = False)
+    hypers = load_hypers_from_file(HYPERS_PATH)
     FITTING_SCHEME = hypers.FITTING_SCHEME
     MLIP_SETTINGS = hypers.MLIP_SETTINGS
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
