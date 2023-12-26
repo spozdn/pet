@@ -28,16 +28,8 @@ class SingleStructCalculator():
         if MLIP_SETTINGS.USE_ENERGIES:
             self.self_contributions = np.load(self_contributions_path)
             
-        add_tokens = []
-        for _ in range(ARCHITECTURAL_HYPERS.N_GNN_LAYERS - 1):
-            add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_FIRST)
-        add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_SECOND)
-
-        model = PET(ARCHITECTURAL_HYPERS, ARCHITECTURAL_HYPERS.TRANSFORMER_D_MODEL, ARCHITECTURAL_HYPERS.TRANSFORMER_N_HEAD,
-                               ARCHITECTURAL_HYPERS.TRANSFORMER_DIM_FEEDFORWARD, ARCHITECTURAL_HYPERS.N_TRANS_LAYERS, 
-                               0.0, len(all_species), 
-                               ARCHITECTURAL_HYPERS.N_GNN_LAYERS, ARCHITECTURAL_HYPERS.HEAD_N_NEURONS, ARCHITECTURAL_HYPERS.TRANSFORMERS_CENTRAL_SPECIFIC, ARCHITECTURAL_HYPERS.HEADS_CENTRAL_SPECIFIC, 
-                               add_tokens, FITTING_SCHEME.GLOBAL_AUG).to(device)
+        model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species),
+                FITTING_SCHEME.GLOBAL_AUG).to(device)
         
         model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
         if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():

@@ -277,16 +277,26 @@ class Head(torch.nn.Module):
         outputs = self.nn(pooled)[..., 0]
         return {"atomic_energies" : outputs}
     
-    
 class PET(torch.nn.Module):
-    def __init__(self, hypers, transformer_d_model, transformer_n_head,
-                       transformer_dim_feedforward, transformer_n_layers, 
-                       transformer_dropout, n_atomic_species, 
-                       n_gnn_layers, head_n_neurons, 
-                       transformers_central_specific, 
-                       heads_central_specific, add_central_tokens, global_aug):
+    def __init__(self, hypers, transformer_dropout, n_atomic_species, 
+                  global_aug):
         super(PET, self).__init__()
         self.hypers = hypers
+        transformer_d_model = hypers.TRANSFORMER_D_MODEL
+        transformer_n_head = hypers.TRANSFORMER_N_HEAD
+        transformer_dim_feedforward = hypers.TRANSFORMER_DIM_FEEDFORWARD
+        transformer_n_layers = hypers.N_TRANS_LAYERS
+        n_gnn_layers = hypers.N_GNN_LAYERS
+        head_n_neurons = hypers.HEAD_N_NEURONS
+        transformers_central_specific = hypers.TRANSFORMERS_CENTRAL_SPECIFIC
+        heads_central_specific = hypers.HEADS_CENTRAL_SPECIFIC
+
+        add_central_tokens = []
+        for _ in range(hypers.N_GNN_LAYERS - 1):
+            add_central_tokens.append(hypers.ADD_TOKEN_FIRST)
+        add_central_tokens.append(hypers.ADD_TOKEN_SECOND)
+
+
         self.embedding = nn.Embedding(n_atomic_species + 1, transformer_d_model)
         self.global_aug = global_aug
         gnn_layers = []

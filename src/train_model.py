@@ -95,17 +95,8 @@ def main():
         train_loader = DataLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
         val_loader = DataLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
 
-
-    add_tokens = []
-    for _ in range(ARCHITECTURAL_HYPERS.N_GNN_LAYERS - 1):
-        add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_FIRST)
-    add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_SECOND)
-
-    model = PET(ARCHITECTURAL_HYPERS, ARCHITECTURAL_HYPERS.TRANSFORMER_D_MODEL, ARCHITECTURAL_HYPERS.TRANSFORMER_N_HEAD,
-                           ARCHITECTURAL_HYPERS.TRANSFORMER_DIM_FEEDFORWARD, ARCHITECTURAL_HYPERS.N_TRANS_LAYERS, 
-                           0.0, len(all_species), 
-                           ARCHITECTURAL_HYPERS.N_GNN_LAYERS, ARCHITECTURAL_HYPERS.HEAD_N_NEURONS, ARCHITECTURAL_HYPERS.TRANSFORMERS_CENTRAL_SPECIFIC, ARCHITECTURAL_HYPERS.HEADS_CENTRAL_SPECIFIC, 
-                           add_tokens, FITTING_SCHEME.GLOBAL_AUG).to(device)
+    model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species),
+                FITTING_SCHEME.GLOBAL_AUG).to(device)
 
     model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
     if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
@@ -171,11 +162,7 @@ def main():
         multiplication_rmse_model_keeper = ModelKeeper()
         multiplication_mae_model_keeper = ModelKeeper()
 
-    best_val_mae = None
-    best_val_model = None
     pbar = tqdm(range(FITTING_SCHEME.EPOCH_NUM))
-
-
 
     for epoch in pbar:
 
