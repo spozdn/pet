@@ -28,145 +28,159 @@ def propagate_duplicated_params(provided_hypers, default_hypers, first_key, seco
         
     return output_key, output_value
 
-def combine_hypers(provided_hypers, default_hypers, check_duplicated):    
-    duplicated_params = ['ATOMIC_BATCH_SIZE', 'STRUCTURAL_BATCH_SIZE',
-                         'EPOCH_NUM', 'EPOCH_NUM_ATOMIC',
-                         'SCHEDULER_STEP_SIZE', 'SCHEDULER_STEP_SIZE_ATOMIC',
-                         'EPOCHS_WARMUP', 'EPOCHS_WARMUP_ATOMIC']
+def check_is_shallow(hypers):
+    for key in hypers.keys():
+        if isinstance(hypers[key], dict):
+            raise ValueError("Nesting of more than two is not supported")
+        
+    
+def combine_hypers(provided_hypers, default_hypers, check_duplicated):
+    group_keys = ['ARCHITECTURAL_HYPERS', 'FITTING_SCHEME', 'MLIP_SETTINGS']
+    for key in provided_hypers.keys():
+        if key not in group_keys:
+            raise ValueError(f"unknown hyper parameter {key}")
+        
+    for key in default_hypers.keys():
+        if key not in group_keys:
+            raise ValueError(f"unknown hyper parameter {key}")
+        
+    result = {}
+    for key in group_keys:
+        default_now = default_hypers[key]
+        if key in provided_hypers.keys():
+            provided_now = provided_hypers[key]
+        else:
+            provided_now = {}
+        if key == 'FITTING_SCHEME':
+            duplicated_params = [['ATOMIC_BATCH_SIZE', 'STRUCTURAL_BATCH_SIZE'],
+                         ['EPOCH_NUM', 'EPOCH_NUM_ATOMIC'],
+                         ['SCHEDULER_STEP_SIZE', 'SCHEDULER_STEP_SIZE_ATOMIC'],
+                         ['EPOCHS_WARMUP', 'EPOCHS_WARMUP_ATOMIC']]
+        else:
+            duplicated_params = []
+        result[key] = combine_hypers_shallow(provided_now, default_now, check_duplicated,
+                                              duplicated_params)
     
     
+    if (not result['MLIP_SETTINGS']['USE_ENERGIES']) and (not result['MLIP_SETTINGS']['USE_FORCES']):
+        raise ValueError("At least one of the energies and forces should be used for fitting")
+        
+    if (not result['MLIP_SETTINGS']['USE_ENERGIES']) or (not result['MLIP_SETTINGS']['USE_FORCES']):
+        if (result['MLIP_SETTINGS']['ENERGY_WEIGHT'] is not None):
+            warnings.warn("ENERGY_WEIGHT was provided, but in the current calculation, it doesn't affect anything since only one target of energies and forces is used")
+
+    if result['ARCHITECTURAL_HYPERS']['USE_ADDITIONAL_SCALAR_ATTRIBUTES']:
+        if result['ARCHITECTURAL_HYPERS']['SCALAR_ATTRIBUTES_SIZE'] is None:
+            raise ValueError("scalar attributes size must be provided if use_additional_scalar_attributes == True")
+        
+    return result
+
+def combine_hypers_shallow(provided_hypers, default_hypers, check_duplicated,
+                            duplicated_params):  
+    check_is_shallow(provided_hypers)
+    check_is_shallow(default_hypers)  
+
+    duplicated_params_unrolled = []
+    for el in duplicated_params:
+        duplicated_params_unrolled.append(el[0])
+        duplicated_params_unrolled.append(el[1])
+
     for key in provided_hypers.keys():
         if key not in default_hypers.keys():
-            if key not in duplicated_params:                
+            if key not in duplicated_params_unrolled:                
                 raise ValueError(f"unknown hyper parameter {key}")
     
     result = {}
     
     for key in default_hypers.keys():        
         if key in provided_hypers.keys():
-            if key not in duplicated_params:
+            if key not in duplicated_params_unrolled:
                 result[key] = provided_hypers[key]
         else:
-            if key not in duplicated_params:
+            if key not in duplicated_params_unrolled:
                 result[key] = default_hypers[key]
    
 
-    dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, 'ATOMIC_BATCH_SIZE', 
-                                                         'STRUCTURAL_BATCH_SIZE', check_duplicated)               
-    result[dupl_key] = dupl_value
-    
-    
-    dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, 'EPOCH_NUM', 
-                                                         'EPOCH_NUM_ATOMIC', check_duplicated)               
-    result[dupl_key] = dupl_value 
-    
-    dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, 'SCHEDULER_STEP_SIZE', 
-                                                         'SCHEDULER_STEP_SIZE_ATOMIC', check_duplicated)               
-    result[dupl_key] = dupl_value  
-    
-    dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, 'EPOCHS_WARMUP', 
-                                                         'EPOCHS_WARMUP_ATOMIC', check_duplicated)               
-    result[dupl_key] = dupl_value   
-        
-        
-    if (not result['USE_ENERGIES']) and (not result['USE_FORCES']):
-        raise ValueError("At least one of the energies and forces should be used for fitting")
-        
-    if (not result['USE_ENERGIES']) or (not result['USE_FORCES']):
-        if (result['ENERGY_WEIGHT'] is not None):
-            warnings.warn("ENERGY_WEIGHT was provided, but in the current calculation, it doesn't affect anything since only one target of energies and forces is used")
-            
-    if result['USE_ADDITIONAL_SCALAR_ATTRIBUTES']:
-        if result['SCALAR_ATTRIBUTES_SIZE'] is None:
-            raise ValueError("scalar attributes size must be provided if use_additional_scalar_attributes == True")
-            
+    for el in duplicated_params:
+        dupl_key, dupl_value = propagate_duplicated_params(provided_hypers, default_hypers, el[0], el[1], check_duplicated)               
+        result[dupl_key] = dupl_value
+         
     return result
 
-class Hypers():
-    def __init__(self):
-        self.is_set = False
-    
-    
-    def set_from_dict(self, hypers_dict):
-        if self.is_set:
-            raise ValueError("Hypers are already set")
-        for k, v in hypers_dict.items():
-            setattr(self, k, v)
-        self.is_set = True
-        
-    @staticmethod 
-    def fix_Nones_in_yaml(hypers_dict):
-        for key in hypers_dict.keys():
-            if (hypers_dict[key] == 'None') or (hypers_dict[key] == 'none'):
-                hypers_dict[key] = None
-              
-    
-    def load_from_file(self, path_to_hypers):
-        if self.is_set:
-            raise ValueError("Hypers are already set")
-            
-        loader = yaml.SafeLoader
-        loader.add_implicit_resolver(
-            u'tag:yaml.org,2002:float',
-            re.compile(u'''^(?:
-             [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
-            |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
-            |\\.[0-9_]+(?:[eE][-+][0-9]+)?
-            |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
-            |[-+]?\\.(?:inf|Inf|INF)
-            |\\.(?:nan|NaN|NAN))$''', re.X),
-            list(u'-+0123456789.'))
-        
-        with open(path_to_hypers, 'r') as f:
-            hypers = yaml.load(f, Loader = loader)
-            Hypers.fix_Nones_in_yaml(hypers)
-            
-        self.set_from_dict(hypers)      
-        
-    
-            
-    
-    def set_from_files(self, path_to_provided_hypers, path_to_default_hypers, check_duplicated = True):
-        if self.is_set:
-            raise ValueError("Hypers are already set")
-            
-        loader = yaml.SafeLoader
-        loader.add_implicit_resolver(
-            u'tag:yaml.org,2002:float',
-            re.compile(u'''^(?:
-             [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
-            |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
-            |\\.[0-9_]+(?:[eE][-+][0-9]+)?
-            |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
-            |[-+]?\\.(?:inf|Inf|INF)
-            |\\.(?:nan|NaN|NAN))$''', re.X),
-            list(u'-+0123456789.'))
 
-        with open(path_to_provided_hypers, 'r') as f:
-            provided_hypers = yaml.load(f, Loader = loader)
-            Hypers.fix_Nones_in_yaml(provided_hypers)
+def fix_Nones_in_yaml(hypers_dict):
+    for key in hypers_dict.keys():
+        if (hypers_dict[key] == 'None') or (hypers_dict[key] == 'none'):
+            hypers_dict[key] = None
+        if isinstance(hypers_dict[key], dict):
+            fix_Nones_in_yaml(hypers_dict[key])
         
-        with open(path_to_default_hypers, 'r') as f:
-            default_hypers = yaml.load(f, Loader = loader)
-            Hypers.fix_Nones_in_yaml(default_hypers)
+class Hypers:
+    def __init__(self, hypers_dict):
+        for key, value in hypers_dict.items():
+            if isinstance(value, dict):
+                self.__dict__[key] = Hypers(value)
+            else:
+                self.__dict__[key] = value
+ 
+def load_hypers_from_file(path_to_hypers):
         
-        combined_hypers = combine_hypers(provided_hypers, default_hypers, check_duplicated)
-        self.set_from_dict(combined_hypers)
-        
-       
-def save_hypers(hypers, path_save):
-    all_members = inspect.getmembers(hypers, lambda member:not(inspect.isroutine(member)))
-    all_hypers = []
-    for member in all_members:
-        if member[0].startswith('__'):
-            continue
-        if member[0] == 'is_set':
-            continue
-        all_hypers.append(member)
-    all_hypers = {hyper[0] : hyper[1] for hyper in all_hypers}
-
-    with open(path_save, "w") as f:
-        yaml.dump(all_hypers, f)
+    loader = yaml.SafeLoader
+    loader.add_implicit_resolver(
+        u'tag:yaml.org,2002:float',
+        re.compile(u'''^(?:
+            [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
+        |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
+        |\\.[0-9_]+(?:[eE][-+][0-9]+)?
+        |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
+        |[-+]?\\.(?:inf|Inf|INF)
+        |\\.(?:nan|NaN|NAN))$''', re.X),
+        list(u'-+0123456789.'))
     
+    with open(path_to_hypers, 'r') as f:
+        hypers = yaml.load(f, Loader = loader)
+        fix_Nones_in_yaml(hypers)
+        
+    return Hypers(hypers)    
+             
     
+def set_hypers_from_files(path_to_provided_hypers,
+                           path_to_default_hypers, check_duplicated = True):
    
+        
+    loader = yaml.SafeLoader
+    loader.add_implicit_resolver(
+        u'tag:yaml.org,2002:float',
+        re.compile(u'''^(?:
+            [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
+        |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
+        |\\.[0-9_]+(?:[eE][-+][0-9]+)?
+        |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
+        |[-+]?\\.(?:inf|Inf|INF)
+        |\\.(?:nan|NaN|NAN))$''', re.X),
+        list(u'-+0123456789.'))
+
+    with open(path_to_provided_hypers, 'r') as f:
+        provided_hypers = yaml.load(f, Loader = loader)
+        fix_Nones_in_yaml(provided_hypers)
+    
+    with open(path_to_default_hypers, 'r') as f:
+        default_hypers = yaml.load(f, Loader = loader)
+        fix_Nones_in_yaml(default_hypers)
+    
+    combined_hypers = combine_hypers(provided_hypers, default_hypers, check_duplicated)
+    return Hypers(combined_hypers)
+        
+
+
+def hypers_to_dict(obj):
+    if isinstance(obj, Hypers):
+        return {key: hypers_to_dict(value) for key, value in obj.__dict__.items()}
+    else:
+        return obj
+
+
+def save_hypers(hypers, path_save):
+    hypers_dict = hypers_to_dict(hypers)
+    with open(path_save, "w") as f:
+        yaml.dump(hypers_dict, f)

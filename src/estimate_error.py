@@ -9,7 +9,7 @@ import time
 from torch_geometric.nn import DataParallel
 
 
-from .hypers import Hypers
+from .hypers import set_hypers_from_files
 from .pet import PET, PETMLIPWrapper
 from .utilities import get_rmse, get_mae, set_reproducibility
 import argparse
@@ -49,69 +49,71 @@ def main():
         N_AUG = args.n_aug
         USE_AUGMENTATION = True
 
-    hypers = Hypers()
     # loading default values for the new hypers potentially added into the codebase after the calculation is done
     # assuming that the default values do not change the logic
-    hypers.set_from_files(HYPERS_PATH, args.default_hypers_path, check_duplicated = False)
+    hypers = set_hypers_from_files(HYPERS_PATH, args.default_hypers_path, check_duplicated = False)
+    FITTING_SCHEME = hypers.FITTING_SCHEME
+    MLIP_SETTINGS = hypers.MLIP_SETTINGS
+    ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
 
-    set_reproducibility(hypers.RANDOM_SEED, hypers.CUDA_DETERMINISTIC)
+    set_reproducibility(FITTING_SCHEME.RANDOM_SEED, FITTING_SCHEME.CUDA_DETERMINISTIC)
 
     if args.batch_size == -1:
-        args.batch_size = hypers.STRUCTURAL_BATCH_SIZE
+        args.batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE
 
     structures = ase.io.read(args.structures_path, index = ':')
 
     all_species = np.load(ALL_SPECIES_PATH)
-    if hypers.USE_ENERGIES:
+    if MLIP_SETTINGS.USE_ENERGIES:
         self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
 
-    graphs = get_pyg_graphs(structures, all_species, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
-    forces = get_forces(structures, hypers.FORCES_KEY)
+    graphs = get_pyg_graphs(structures, all_species, ARCHITECTURAL_HYPERS.R_CUT, ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+    forces = get_forces(structures, MLIP_SETTINGS.FORCES_KEY)
     update_pyg_graphs(graphs, 'forces', forces)
 
-    if hypers.MULTI_GPU:
+    if FITTING_SCHEME.MULTI_GPU:
         loader = DataListLoader(graphs, batch_size=args.batch_size, shuffle=False)
     else:        
         loader = DataLoader(graphs, batch_size=args.batch_size, shuffle=False)
 
     add_tokens = []
-    for _ in range(hypers.N_GNN_LAYERS - 1):
-        add_tokens.append(hypers.ADD_TOKEN_FIRST)
-    add_tokens.append(hypers.ADD_TOKEN_SECOND)
+    for _ in range(ARCHITECTURAL_HYPERS.N_GNN_LAYERS - 1):
+        add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_FIRST)
+    add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_SECOND)
 
-    model = PET(hypers, hypers.TRANSFORMER_D_MODEL, hypers.TRANSFORMER_N_HEAD,
-                           hypers.TRANSFORMER_DIM_FEEDFORWARD, hypers.N_TRANS_LAYERS, 
+    model = PET(ARCHITECTURAL_HYPERS, ARCHITECTURAL_HYPERS.TRANSFORMER_D_MODEL, ARCHITECTURAL_HYPERS.TRANSFORMER_N_HEAD,
+                           ARCHITECTURAL_HYPERS.TRANSFORMER_DIM_FEEDFORWARD, ARCHITECTURAL_HYPERS.N_TRANS_LAYERS, 
                            0.0, len(all_species), 
-                           hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
-                           add_tokens).to(device)
+                           ARCHITECTURAL_HYPERS.N_GNN_LAYERS, ARCHITECTURAL_HYPERS.HEAD_N_NEURONS, ARCHITECTURAL_HYPERS.TRANSFORMERS_CENTRAL_SPECIFIC, ARCHITECTURAL_HYPERS.HEADS_CENTRAL_SPECIFIC, 
+                           add_tokens, FITTING_SCHEME.GLOBAL_AUG).to(device)
 
-    model = PETMLIPWrapper(model, hypers)
+    model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
 
-    if hypers.MULTI_GPU and torch.cuda.is_available():
+    if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
         model = DataParallel(model)
         model = model.to( torch.device('cuda:0'))
 
     model.load_state_dict(torch.load(PATH_TO_MODEL_STATE_DICT))
     model.eval()
 
-    if hypers.USE_ENERGIES:
-        energies_ground_truth = np.array([struc.info[hypers.ENERGY_KEY] for struc in structures])
+    if MLIP_SETTINGS.USE_ENERGIES:
+        energies_ground_truth = np.array([struc.info[MLIP_SETTINGS.ENERGY_KEY] for struc in structures])
 
-    if hypers.USE_FORCES:
-        forces_ground_truth = [struc.arrays[hypers.FORCES_KEY] for struc in structures]
+    if MLIP_SETTINGS.USE_FORCES:
+        forces_ground_truth = [struc.arrays[MLIP_SETTINGS.FORCES_KEY] for struc in structures]
         forces_ground_truth = np.concatenate(forces_ground_truth, axis = 0)
 
 
 
-    if hypers.USE_ENERGIES:
+    if MLIP_SETTINGS.USE_ENERGIES:
         all_energies_predicted = []
 
-    if hypers.USE_FORCES:
+    if MLIP_SETTINGS.USE_FORCES:
         all_forces_predicted = []
 
     #warmup for correct time estimation
     for batch in loader:
-        if not hypers.MULTI_GPU:
+        if not FITTING_SCHEME.MULTI_GPU:
             batch.to(device)
 
         predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
@@ -119,26 +121,26 @@ def main():
 
     begin = time.time()
     for _ in tqdm(range(N_AUG)):
-        if hypers.USE_ENERGIES:
+        if MLIP_SETTINGS.USE_ENERGIES:
             energies_predicted = []
-        if hypers.USE_FORCES:
+        if MLIP_SETTINGS.USE_FORCES:
             forces_predicted = []
 
         for batch in loader:
-            if not hypers.MULTI_GPU:
+            if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
             predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
-            if hypers.USE_ENERGIES:
+            if MLIP_SETTINGS.USE_ENERGIES:
                 energies_predicted.append(predictions_energies.data.cpu().numpy())
-            if hypers.USE_FORCES:
+            if MLIP_SETTINGS.USE_FORCES:
                 forces_predicted.append(predictions_forces.data.cpu().numpy())
 
-        if hypers.USE_ENERGIES:
+        if MLIP_SETTINGS.USE_ENERGIES:
             energies_predicted = np.concatenate(energies_predicted, axis = 0)
             all_energies_predicted.append(energies_predicted)
 
-        if hypers.USE_FORCES:
+        if MLIP_SETTINGS.USE_FORCES:
             forces_predicted = np.concatenate(forces_predicted, axis = 0)
             all_forces_predicted.append(forces_predicted)
 
@@ -146,7 +148,7 @@ def main():
     n_atoms = np.array([len(struc.positions) for struc in structures])
     time_per_atom = total_time / (np.sum(n_atoms) * N_AUG)
 
-    if hypers.USE_ENERGIES:
+    if MLIP_SETTINGS.USE_ENERGIES:
         all_energies_predicted = [el[np.newaxis] for el in all_energies_predicted]
         all_energies_predicted = np.concatenate(all_energies_predicted, axis = 0)
         energies_predicted_mean = np.mean(all_energies_predicted, axis = 0)
@@ -183,7 +185,7 @@ def main():
                 print(f"energies rotational discrepancy std per atom: {energies_rotational_std_per_atom}")
 
 
-    if hypers.USE_FORCES:
+    if MLIP_SETTINGS.USE_FORCES:
         all_forces_predicted = [el[np.newaxis] for el in all_forces_predicted]
         all_forces_predicted = np.concatenate(all_forces_predicted, axis = 0)
         forces_predicted_mean = np.mean(all_forces_predicted, axis = 0)
@@ -202,16 +204,16 @@ def main():
     if args.verbose:
         print(f"approximate time per atom (batch size is {args.batch_size}): {time_per_atom} seconds")
 
-    '''if hypers.USE_ENERGIES and not hypers.USE_FORCES:
+    '''if MLIP_SETTINGS.USE_ENERGIES and not MLIP_SETTINGS.USE_FORCES:
         print(f"approximate time to compute energies per atom: {time_per_atom} seconds")
     else:
         print(f"approximate time to compute energies and forces per atom: {time_per_atom} seconds")'''
 
 
     if args.path_save_predictions is not None:
-        if hypers.USE_ENERGIES:
+        if MLIP_SETTINGS.USE_ENERGIES:
             np.save(args.path_save_predictions + '/energies_predicted.npy', energies_predicted_mean)
-        if hypers.USE_FORCES:
+        if MLIP_SETTINGS.USE_FORCES:
             np.save(args.path_save_predictions + '/forces_predicted.npy', forces_predicted_mean)
 
 

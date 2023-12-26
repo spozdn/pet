@@ -284,11 +284,11 @@ class PET(torch.nn.Module):
                        transformer_dropout, n_atomic_species, 
                        n_gnn_layers, head_n_neurons, 
                        transformers_central_specific, 
-                       heads_central_specific, add_central_tokens):
+                       heads_central_specific, add_central_tokens, global_aug):
         super(PET, self).__init__()
         self.hypers = hypers
         self.embedding = nn.Embedding(n_atomic_species + 1, transformer_d_model)
-            
+        self.global_aug = global_aug
         gnn_layers = []
         if transformers_central_specific:
             for layer_index in range(n_gnn_layers):
@@ -427,7 +427,7 @@ class PET(torch.nn.Module):
     def forward(self, batch, augmentation):
         if augmentation:
             indices = batch.batch.cpu().data.numpy()
-            rotations = torch.FloatTensor(get_rotations(indices, global_aug = self.hypers.GLOBAL_AUG)).to(batch.x.device)
+            rotations = torch.FloatTensor(get_rotations(indices, global_aug = self.global_aug)).to(batch.x.device)
             x_initial = batch.x
             batch.x = torch.bmm(x_initial, rotations)
             predictions = self.get_predictions(batch)
@@ -438,14 +438,15 @@ class PET(torch.nn.Module):
     
 
 class PETMLIPWrapper(torch.nn.Module):
-    def __init__(self, model, hypers):
+    def __init__(self, model, use_energies, use_forces):
         super(PETMLIPWrapper, self).__init__()
         self.model = model
-        self.hypers = hypers
+        self.use_energies = use_energies
+        self.use_forces = use_forces
     
     def forward(self, batch, augmentation, create_graph):
         
-        if self.hypers.USE_FORCES:
+        if self.use_forces:
             batch.x.requires_grad = True
             predictions = self.model(batch, augmentation = augmentation)
             grads  = torch.autograd.grad(predictions, batch.x, grad_outputs = torch.ones_like(predictions),
@@ -461,14 +462,14 @@ class PETMLIPWrapper(torch.nn.Module):
             predictions = self.model(batch, augmentation = augmentation)
 
         result = []
-        if self.hypers.USE_ENERGIES:
+        if self.use_energies:
             result.append(predictions)
             result.append(batch.y)
         else:
             result.append(None)
             result.append(None)
             
-        if self.hypers.USE_FORCES:
+        if self.use_forces:
             result.append(first - second)
             result.append(batch.forces)
         else:

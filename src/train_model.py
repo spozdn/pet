@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import LambdaLR
 import random
 from torch_geometric.nn import DataParallel
 
-from .hypers import Hypers, save_hypers
+from .hypers import save_hypers, set_hypers_from_files
 from .pet import PET, PETMLIPWrapper
 from .utilities import FullLogger
 from .utilities import get_rmse, get_loss, set_reproducibility, get_calc_names
@@ -34,12 +34,15 @@ def main():
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    hypers = Hypers()
-    hypers.set_from_files(args.provided_hypers_path, args.default_hypers_path)
-    set_reproducibility(hypers.RANDOM_SEED, hypers.CUDA_DETERMINISTIC)
+    hypers = set_hypers_from_files(args.provided_hypers_path, args.default_hypers_path)
+    FITTING_SCHEME = hypers.FITTING_SCHEME
+    MLIP_SETTINGS = hypers.MLIP_SETTINGS
+    ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
+
+    set_reproducibility(FITTING_SCHEME.RANDOM_SEED, FITTING_SCHEME.CUDA_DETERMINISTIC)
 
     train_structures = ase.io.read(args.train_structures_path, index = ':')
-    adapt_hypers(hypers, train_structures)
+    adapt_hypers(FITTING_SCHEME, train_structures)
 
     val_structures = ase.io.read(args.val_structures_path, index = ':')
     structures = train_structures + val_structures 
@@ -57,22 +60,22 @@ def main():
     print(len(train_structures))
     print(len(val_structures))
 
-    train_graphs = get_pyg_graphs(train_structures, all_species, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
-    val_graphs = get_pyg_graphs(val_structures, all_species, hypers.R_CUT, hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+    train_graphs = get_pyg_graphs(train_structures, all_species, ARCHITECTURAL_HYPERS.R_CUT, ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+    val_graphs = get_pyg_graphs(val_structures, all_species, ARCHITECTURAL_HYPERS.R_CUT, ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
 
-    if hypers.USE_ENERGIES:
-        self_contributions = get_self_contributions(hypers.ENERGY_KEY, train_structures, all_species)
+    if MLIP_SETTINGS.USE_ENERGIES:
+        self_contributions = get_self_contributions(MLIP_SETTINGS.ENERGY_KEY, train_structures, all_species)
         np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', self_contributions)
 
-        train_energies = get_corrected_energies(hypers.ENERGY_KEY, train_structures, all_species, self_contributions)
-        val_energies = get_corrected_energies(hypers.ENERGY_KEY, val_structures, all_species, self_contributions)
+        train_energies = get_corrected_energies(MLIP_SETTINGS.ENERGY_KEY, train_structures, all_species, self_contributions)
+        val_energies = get_corrected_energies(MLIP_SETTINGS.ENERGY_KEY, val_structures, all_species, self_contributions)
 
         update_pyg_graphs(train_graphs, 'y', train_energies)
         update_pyg_graphs(val_graphs, 'y', val_energies)
 
-    if hypers.USE_FORCES:
-        train_forces = get_forces(train_structures, hypers.FORCES_KEY)
-        val_forces = get_forces(val_structures, hypers.FORCES_KEY)
+    if MLIP_SETTINGS.USE_FORCES:
+        train_forces = get_forces(train_structures, MLIP_SETTINGS.FORCES_KEY)
+        val_forces = get_forces(val_structures, MLIP_SETTINGS.FORCES_KEY)
 
         update_pyg_graphs(train_graphs, 'forces', train_forces)
         update_pyg_graphs(val_graphs, 'forces', val_forces)
@@ -83,46 +86,46 @@ def main():
         numpy.random.seed(worker_seed)
         random.seed(worker_seed)
     g = torch.Generator()
-    g.manual_seed(hypers.RANDOM_SEED)
+    g.manual_seed(FITTING_SCHEME.RANDOM_SEED)
 
-    if hypers.MULTI_GPU:
-        train_loader = DataListLoader(train_graphs, batch_size=hypers.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-        val_loader = DataListLoader(val_graphs, batch_size = hypers.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+    if FITTING_SCHEME.MULTI_GPU:
+        train_loader = DataListLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
+        val_loader = DataListLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
     else:
-        train_loader = DataLoader(train_graphs, batch_size=hypers.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-        val_loader = DataLoader(val_graphs, batch_size = hypers.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+        train_loader = DataLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
+        val_loader = DataLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
 
 
     add_tokens = []
-    for _ in range(hypers.N_GNN_LAYERS - 1):
-        add_tokens.append(hypers.ADD_TOKEN_FIRST)
-    add_tokens.append(hypers.ADD_TOKEN_SECOND)
+    for _ in range(ARCHITECTURAL_HYPERS.N_GNN_LAYERS - 1):
+        add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_FIRST)
+    add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_SECOND)
 
-    model = PET(hypers, hypers.TRANSFORMER_D_MODEL, hypers.TRANSFORMER_N_HEAD,
-                           hypers.TRANSFORMER_DIM_FEEDFORWARD, hypers.N_TRANS_LAYERS, 
+    model = PET(ARCHITECTURAL_HYPERS, ARCHITECTURAL_HYPERS.TRANSFORMER_D_MODEL, ARCHITECTURAL_HYPERS.TRANSFORMER_N_HEAD,
+                           ARCHITECTURAL_HYPERS.TRANSFORMER_DIM_FEEDFORWARD, ARCHITECTURAL_HYPERS.N_TRANS_LAYERS, 
                            0.0, len(all_species), 
-                           hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
-                           add_tokens).to(device)
+                           ARCHITECTURAL_HYPERS.N_GNN_LAYERS, ARCHITECTURAL_HYPERS.HEAD_N_NEURONS, ARCHITECTURAL_HYPERS.TRANSFORMERS_CENTRAL_SPECIFIC, ARCHITECTURAL_HYPERS.HEADS_CENTRAL_SPECIFIC, 
+                           add_tokens, FITTING_SCHEME.GLOBAL_AUG).to(device)
 
-    model = PETMLIPWrapper(model, hypers)
-    if hypers.MULTI_GPU and torch.cuda.is_available():
+    model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
+    if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
         model = DataParallel(model)
         model = model.to(torch.device('cuda:0'))
     
-    optim = torch.optim.Adam(model.parameters(), lr = hypers.INITIAL_LR)
+    optim = torch.optim.Adam(model.parameters(), lr = FITTING_SCHEME.INITIAL_LR)
 
     def func_lr_scheduler(epoch):
-        if epoch < hypers.EPOCHS_WARMUP:
-            return epoch / hypers.EPOCHS_WARMUP
-        delta = epoch - hypers.EPOCHS_WARMUP
-        num_blocks = delta // hypers.SCHEDULER_STEP_SIZE 
+        if epoch < FITTING_SCHEME.EPOCHS_WARMUP:
+            return epoch / FITTING_SCHEME.EPOCHS_WARMUP
+        delta = epoch - FITTING_SCHEME.EPOCHS_WARMUP
+        num_blocks = delta // FITTING_SCHEME.SCHEDULER_STEP_SIZE 
         return 0.5 ** (num_blocks)
 
     scheduler = LambdaLR(optim, func_lr_scheduler)
 
 
-    if hypers.MODEL_TO_START_WITH is not None:
-        model.load_state_dict(torch.load(hypers.MODEL_TO_START_WITH))
+    if FITTING_SCHEME.MODEL_TO_START_WITH is not None:
+        model.load_state_dict(torch.load(FITTING_SCHEME.MODEL_TO_START_WITH))
 
     if name_to_load is not None:
         checkpoint = torch.load(f'results/{name_to_load}/checkpoint')
@@ -133,19 +136,19 @@ def main():
 
 
     history = []
-    if hypers.USE_ENERGIES:
+    if MLIP_SETTINGS.USE_ENERGIES:
         energies_logger = FullLogger()
 
-    if hypers.USE_FORCES:
+    if MLIP_SETTINGS.USE_FORCES:
         forces_logger = FullLogger()
 
 
 
-    if hypers.USE_FORCES:
+    if MLIP_SETTINGS.USE_FORCES:
         all_val_forces = []
         model.train(False)
         for batch in val_loader:
-            if not hypers.MULTI_GPU:
+            if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
                 
 
@@ -158,19 +161,19 @@ def main():
         forces_rmse_model_keeper = ModelKeeper()
         forces_mae_model_keeper = ModelKeeper()
 
-    if hypers.USE_ENERGIES:
+    if MLIP_SETTINGS.USE_ENERGIES:
         sliding_energies_rmse = get_rmse(val_energies, np.mean(val_energies))
 
         energies_rmse_model_keeper = ModelKeeper()
         energies_mae_model_keeper = ModelKeeper()
 
-    if hypers.USE_ENERGIES and hypers.USE_FORCES:
+    if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES:
         multiplication_rmse_model_keeper = ModelKeeper()
         multiplication_mae_model_keeper = ModelKeeper()
 
     best_val_mae = None
     best_val_model = None
-    pbar = tqdm(range(hypers.EPOCH_NUM))
+    pbar = tqdm(range(FITTING_SCHEME.EPOCH_NUM))
 
 
 
@@ -178,24 +181,24 @@ def main():
 
         model.train(True)
         for batch in train_loader:
-            if not hypers.MULTI_GPU:
+            if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
             predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = True, create_graph = True)
-            if hypers.USE_ENERGIES:
+            if MLIP_SETTINGS.USE_ENERGIES:
                 energies_logger.train_logger.update(predictions_energies, targets_energies)
                 loss_energies = get_loss(predictions_energies, targets_energies)
-            if hypers.USE_FORCES:
+            if MLIP_SETTINGS.USE_FORCES:
                 forces_logger.train_logger.update(predictions_forces, targets_forces)
                 loss_forces = get_loss(predictions_forces, targets_forces)
 
-            if hypers.USE_ENERGIES and hypers.USE_FORCES: 
-                loss = hypers.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
+            if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES: 
+                loss = FITTING_SCHEME.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
                 loss.backward()
 
-            if hypers.USE_ENERGIES and (not hypers.USE_FORCES):
+            if MLIP_SETTINGS.USE_ENERGIES and (not MLIP_SETTINGS.USE_FORCES):
                 loss_energies.backward()
-            if hypers.USE_FORCES and (not hypers.USE_ENERGIES):
+            if MLIP_SETTINGS.USE_FORCES and (not MLIP_SETTINGS.USE_ENERGIES):
                 loss_forces.backward()
 
 
@@ -204,37 +207,37 @@ def main():
 
         model.train(False)
         for batch in val_loader:
-            if not hypers.MULTI_GPU:
+            if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
             predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = False, create_graph = False)
-            if hypers.USE_ENERGIES:
+            if MLIP_SETTINGS.USE_ENERGIES:
                 energies_logger.val_logger.update(predictions_energies, targets_energies)
-            if hypers.USE_FORCES:
+            if MLIP_SETTINGS.USE_FORCES:
                 forces_logger.val_logger.update(predictions_forces, targets_forces)
 
         now = {}
-        if hypers.USE_ENERGIES:
+        if MLIP_SETTINGS.USE_ENERGIES:
             now['energies'] = energies_logger.flush()
-        if hypers.USE_FORCES:
+        if MLIP_SETTINGS.USE_FORCES:
             now['forces'] = forces_logger.flush()   
         now['lr'] = scheduler.get_last_lr()
         now['epoch'] = epoch
         now['elapsed_time'] = time.time() - TIME_SCRIPT_STARTED
 
-        if hypers.USE_ENERGIES:
-            sliding_energies_rmse = hypers.SLIDING_FACTOR * sliding_energies_rmse + (1.0 - hypers.SLIDING_FACTOR) * now['energies']['val']['rmse']
+        if MLIP_SETTINGS.USE_ENERGIES:
+            sliding_energies_rmse = FITTING_SCHEME.SLIDING_FACTOR * sliding_energies_rmse + (1.0 - FITTING_SCHEME.SLIDING_FACTOR) * now['energies']['val']['rmse']
 
             energies_mae_model_keeper.update(model, now['energies']['val']['mae'], epoch)
             energies_rmse_model_keeper.update(model, now['energies']['val']['rmse'], epoch)
 
 
-        if hypers.USE_FORCES:
-            sliding_forces_rmse = hypers.SLIDING_FACTOR * sliding_forces_rmse + (1.0 - hypers.SLIDING_FACTOR) * now['forces']['val']['rmse']
+        if MLIP_SETTINGS.USE_FORCES:
+            sliding_forces_rmse = FITTING_SCHEME.SLIDING_FACTOR * sliding_forces_rmse + (1.0 - FITTING_SCHEME.SLIDING_FACTOR) * now['forces']['val']['rmse']
             forces_mae_model_keeper.update(model, now['forces']['val']['mae'], epoch)
             forces_rmse_model_keeper.update(model, now['forces']['val']['rmse'], epoch)    
 
-        if hypers.USE_ENERGIES and hypers.USE_FORCES:
+        if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES:
             multiplication_mae_model_keeper.update(model, now['forces']['val']['mae'] * now['energies']['val']['mae'], epoch,
                                                    additional_info = [now['energies']['val']['mae'], now['forces']['val']['mae']])
             multiplication_rmse_model_keeper.update(model, now['forces']['val']['rmse'] * now['energies']['val']['rmse'], epoch,
@@ -244,10 +247,10 @@ def main():
         val_mae_message = "val mae/rmse:"
         train_mae_message = "train mae/rmse:"
 
-        if hypers.USE_ENERGIES:
+        if MLIP_SETTINGS.USE_ENERGIES:
             val_mae_message += f" {now['energies']['val']['mae']}/{now['energies']['val']['rmse']};"
             train_mae_message += f" {now['energies']['train']['mae']}/{now['energies']['train']['rmse']};"
-        if hypers.USE_FORCES:
+        if MLIP_SETTINGS.USE_FORCES:
             val_mae_message += f" {now['forces']['val']['mae']}/{now['forces']['val']['rmse']}"
             train_mae_message += f" {now['forces']['train']['mae']}/{now['forces']['train']['rmse']}"
 
@@ -256,8 +259,8 @@ def main():
         history.append(now)
         scheduler.step()
         elapsed = time.time() - TIME_SCRIPT_STARTED
-        if hypers.MAX_TIME is not None:
-            if elapsed > hypers.MAX_TIME:
+        if FITTING_SCHEME.MAX_TIME is not None:
+            if elapsed > FITTING_SCHEME.MAX_TIME:
                 break
 
     import pickle
@@ -277,21 +280,21 @@ def main():
         # torch.save(model_keeper.best_model, f'results/{NAME_OF_CALCULATION}/{model_name}')
 
     summary = ''
-    if hypers.USE_ENERGIES:    
+    if MLIP_SETTINGS.USE_ENERGIES:    
         save_model('best_val_mae_energies_model', energies_mae_model_keeper)
         summary += f'best val mae in energies: {energies_mae_model_keeper.best_error} at epoch {energies_mae_model_keeper.best_epoch}\n'
 
         save_model('best_val_rmse_energies_model', energies_rmse_model_keeper)
         summary += f'best val rmse in energies: {energies_rmse_model_keeper.best_error} at epoch {energies_rmse_model_keeper.best_epoch}\n'
 
-    if hypers.USE_FORCES:
+    if MLIP_SETTINGS.USE_FORCES:
         save_model('best_val_mae_forces_model', forces_mae_model_keeper)
         summary += f'best val mae in forces: {forces_mae_model_keeper.best_error} at epoch {forces_mae_model_keeper.best_epoch}\n'
 
         save_model('best_val_rmse_forces_model', forces_rmse_model_keeper)
         summary += f'best val rmse in forces: {forces_rmse_model_keeper.best_error} at epoch {forces_rmse_model_keeper.best_epoch}\n'
 
-    if hypers.USE_ENERGIES and hypers.USE_FORCES:
+    if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES:
         save_model('best_val_mae_both_model', multiplication_mae_model_keeper)
         summary += f'best both (multiplication) mae in energies: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
 

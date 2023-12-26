@@ -5,7 +5,7 @@ from torch_geometric.nn import DataParallel
 
 from .data_preparation import get_compositional_features
 from .molecule import Molecule
-from .hypers import Hypers
+from .hypers import set_hypers_from_files
 from .pet import PET, PETMLIPWrapper
 
 
@@ -16,25 +16,31 @@ class SingleStructCalculator():
         all_species_path = path_to_calc_folder + '/all_species.npy'
         self_contributions_path = path_to_calc_folder + '/self_contributions.npy'
         
-        hypers = Hypers()
-        hypers.set_from_files(hypers_path, default_hypers_path, check_duplicated = False)
+        hypers = set_hypers_from_files(hypers_path, default_hypers_path, check_duplicated = False)
         
+        MLIP_SETTINGS = hypers.MLIP_SETTINGS
+        ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
+        FITTING_SCHEME = hypers.FITTING_SCHEME
+
+        self.architectural_hypers = ARCHITECTURAL_HYPERS
+
         all_species = np.load(all_species_path)
-        if hypers.USE_ENERGIES:
+        if MLIP_SETTINGS.USE_ENERGIES:
             self.self_contributions = np.load(self_contributions_path)
             
         add_tokens = []
-        for _ in range(hypers.N_GNN_LAYERS - 1):
-            add_tokens.append(hypers.ADD_TOKEN_FIRST)
-        add_tokens.append(hypers.ADD_TOKEN_SECOND)
+        for _ in range(ARCHITECTURAL_HYPERS.N_GNN_LAYERS - 1):
+            add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_FIRST)
+        add_tokens.append(ARCHITECTURAL_HYPERS.ADD_TOKEN_SECOND)
 
-        model = PET(hypers, hypers.TRANSFORMER_D_MODEL, hypers.TRANSFORMER_N_HEAD,
-                               hypers.TRANSFORMER_DIM_FEEDFORWARD, hypers.N_TRANS_LAYERS, 
+        model = PET(ARCHITECTURAL_HYPERS, ARCHITECTURAL_HYPERS.TRANSFORMER_D_MODEL, ARCHITECTURAL_HYPERS.TRANSFORMER_N_HEAD,
+                               ARCHITECTURAL_HYPERS.TRANSFORMER_DIM_FEEDFORWARD, ARCHITECTURAL_HYPERS.N_TRANS_LAYERS, 
                                0.0, len(all_species), 
-                               hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
-                               add_tokens).to(device)
-        model = PETMLIPWrapper(model, hypers)
-        if hypers.MULTI_GPU and torch.cuda.is_available():
+                               ARCHITECTURAL_HYPERS.N_GNN_LAYERS, ARCHITECTURAL_HYPERS.HEAD_N_NEURONS, ARCHITECTURAL_HYPERS.TRANSFORMERS_CENTRAL_SPECIFIC, ARCHITECTURAL_HYPERS.HEADS_CENTRAL_SPECIFIC, 
+                               add_tokens, FITTING_SCHEME.GLOBAL_AUG).to(device)
+        
+        model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
+        if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
             model = DataParallel(model)
             model = model.to( torch.device('cuda:0'))
 
@@ -47,8 +53,8 @@ class SingleStructCalculator():
         
         
     def forward(self, structure):
-        molecule = Molecule(structure, self.hypers.R_CUT, 
-                            self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+        molecule = Molecule(structure, self.architectural_hypers.R_CUT, 
+                            self.architectural_hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
         
         graph = molecule.get_graph(molecule.get_max_num(), self.all_species)
         graph.y = 0
