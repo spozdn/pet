@@ -80,7 +80,6 @@ def main():
         update_pyg_graphs(train_graphs, 'forces', train_forces)
         update_pyg_graphs(val_graphs, 'forces', val_forces)
 
-
     def seed_worker(worker_id):
         worker_seed = torch.initial_seed() % 2**32
         numpy.random.seed(worker_seed)
@@ -114,7 +113,6 @@ def main():
 
     scheduler = LambdaLR(optim, func_lr_scheduler)
 
-
     if FITTING_SCHEME.MODEL_TO_START_WITH is not None:
         model.load_state_dict(torch.load(FITTING_SCHEME.MODEL_TO_START_WITH))
 
@@ -125,7 +123,6 @@ def main():
         optim.load_state_dict(checkpoint['optim_state_dict'])
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
 
-
     history = []
     if MLIP_SETTINGS.USE_ENERGIES:
         energies_logger = FullLogger()
@@ -133,21 +130,10 @@ def main():
     if MLIP_SETTINGS.USE_FORCES:
         forces_logger = FullLogger()
 
-
-
     if MLIP_SETTINGS.USE_FORCES:
-        all_val_forces = []
-        model.train(False)
-        for batch in val_loader:
-            if not FITTING_SCHEME.MULTI_GPU:
-                batch.to(device)
-                
+        val_forces = torch.cat(val_forces, dim = 0)
 
-            _, _, _, targets_forces = model(batch, augmentation = False, create_graph = False)
-            all_val_forces.append(targets_forces.data.cpu().numpy())
-        all_val_forces = np.concatenate(all_val_forces, axis = 0)
-
-        sliding_forces_rmse = get_rmse(all_val_forces, 0.0)
+        sliding_forces_rmse = get_rmse(val_forces.data.cpu().numpy(), 0.0)
 
         forces_rmse_model_keeper = ModelKeeper()
         forces_mae_model_keeper = ModelKeeper()
@@ -295,5 +281,4 @@ def main():
     print("total elapsed time: ", time.time() - TIME_SCRIPT_STARTED)
 
 if __name__ == "__main__":
-    main()
-    
+    main()    
