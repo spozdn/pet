@@ -39,6 +39,9 @@ def main():
     MLIP_SETTINGS = hypers.MLIP_SETTINGS
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
 
+    ARCHITECTURAL_HYPERS.D_OUTPUT = 1 # energy is a single scalar
+    ARCHITECTURAL_HYPERS.TARGET_TYPE = 'structural'  # energy is structural property
+
     set_reproducibility(FITTING_SCHEME.RANDOM_SEED, FITTING_SCHEME.CUDA_DETERMINISTIC)
 
     train_structures = ase.io.read(args.train_structures_path, index = ':')

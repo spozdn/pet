@@ -270,12 +270,12 @@ class Head(torch.nn.Module):
         self.hypers = hypers
         self.nn = nn.Sequential(nn.Linear(n_in, n_neurons), get_activation(hypers),
                                     nn.Linear(n_neurons, n_neurons), get_activation(hypers),
-                                    nn.Linear(n_neurons, 1))
+                                    nn.Linear(n_neurons, hypers.D_OUTPUT))
        
     def forward(self, batch_dict):
         pooled = batch_dict['pooled']
-        outputs = self.nn(pooled)[..., 0]
-        return {"atomic_energies" : outputs}
+        outputs = self.nn(pooled)
+        return {"atomic_predictions" : outputs}
     
 class PET(torch.nn.Module):
     def __init__(self, hypers, transformer_dropout, n_atomic_species, 
@@ -369,12 +369,12 @@ class PET(torch.nn.Module):
             pooled = messages_proceed.sum(dim = 1)
         
         predictions = head({'pooled' : pooled, 
-                                     'central_species' : central_species})['atomic_energies']
+                                     'central_species' : central_species})['atomic_predictions']
         return predictions
     
     def get_predictions_messages_bonds(self, messages, mask, nums, head, central_species):
         predictions = head({'pooled' : messages, 
-                                     'central_species' : central_species})['atomic_energies']
+                                     'central_species' : central_species})['atomic_predictions']
         predictions[mask] = 0.0
         if self.hypers.AVERAGE_BOND_ENERGIES:
             result = predictions.sum(dim = 1) / nums
@@ -384,7 +384,7 @@ class PET(torch.nn.Module):
     
     def get_predictions_central_tokens(self, central_tokens, head, central_species):
         predictions = head({'pooled' : central_tokens, 
-                                     'central_species' : central_species})['atomic_energies']
+                                     'central_species' : central_species})['atomic_predictions']
         return predictions
         
     def get_predictions(self, batch):
@@ -405,7 +405,7 @@ class PET(torch.nn.Module):
         neighbors_pos = batch_dict['neighbors_pos']
         
         batch_dict['input_messages'] = self.embedding(neighbor_species)
-        atomic_energies = 0.0
+        atomic_predictions = 0.0
         
         for layer_index in range(len(self.gnn_layers)):
             head = self.heads[layer_index]
@@ -422,18 +422,22 @@ class PET(torch.nn.Module):
             batch_dict['input_messages'] = 0.5 * (batch_dict['input_messages'] + new_input_messages)
             
             if "central_token" in result.keys():
-                atomic_energies = atomic_energies + self.get_predictions_central_tokens(result["central_token"],
+                atomic_predictions = atomic_predictions + self.get_predictions_central_tokens(result["central_token"],
                                                                                        head, central_species)
             else:
-                 atomic_energies = atomic_energies + self.get_predictions_messages(output_messages, mask, nums, head, central_species, multipliers)
+                 atomic_predictions = atomic_predictions + self.get_predictions_messages(output_messages, mask, nums, head, central_species, multipliers)
                     
             if self.hypers.USE_BOND_ENERGIES:
-                atomic_energies = atomic_energies + self.get_predictions_messages_bonds(output_messages,
+                atomic_predictions = atomic_predictions + self.get_predictions_messages_bonds(output_messages,
                                                                                     mask, nums, bond_head, central_species)
        
-        
-        return torch_geometric.nn.global_add_pool(atomic_energies[:, None],
-                                                  batch=batch_dict['batch'])[:, 0]
+        if self.hypers.TARGET_TYPE == 'structural':
+            return torch_geometric.nn.global_add_pool(atomic_predictions,
+                                                  batch=batch_dict['batch'])
+        if self.hypers.TARGET_TYPE == 'atomic':
+            return atomic_predictions
+        raise ValueError("unknown target type")
+    
     def forward(self, batch, augmentation):
         if augmentation:
             indices = batch.batch.cpu().data.numpy()
@@ -453,12 +457,24 @@ class PETMLIPWrapper(torch.nn.Module):
         self.model = model
         self.use_energies = use_energies
         self.use_forces = use_forces
+        if self.model.hypers.D_OUTPUT != 1:
+            raise ValueError("D_OUTPUT should be 1 for MLIP; energy is a single scalar")
+        if self.model.hypers.TARGET_TYPE != 'structural':
+            raise ValueError("TARGET_TYPE should be structural for MLIP")
     
+    def get_predictions(self, batch, augmentation):
+        predictions = self.model(batch, augmentation = augmentation)
+        if predictions.shape[-1] != 1:
+            raise ValueError("D_OUTPUT should be 1 for MLIP; energy is a single scalar")
+        # if predictions.shape[0] != batch.num_graphs:
+        #    raise ValueError("model should return a single scalar per structure")
+        return predictions[..., 0]
+
     def forward(self, batch, augmentation, create_graph):
         
         if self.use_forces:
             batch.x.requires_grad = True
-            predictions = self.model(batch, augmentation = augmentation)
+            predictions = self.get_predictions(batch, augmentation)
             grads  = torch.autograd.grad(predictions, batch.x, grad_outputs = torch.ones_like(predictions),
                                     create_graph = create_graph)[0]
             neighbors_index = batch.neighbors_index.transpose(0, 1)
@@ -469,7 +485,7 @@ class PETMLIPWrapper(torch.nn.Module):
             grads_messaged[batch.mask] = 0.0
             second = grads_messaged.sum(dim = 1)
         else:
-            predictions = self.model(batch, augmentation = augmentation)
+            predictions = self.get_predictions(batch, augmentation)
 
         result = []
         if self.use_energies:
