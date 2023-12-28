@@ -5,16 +5,14 @@ import torch
 import ase.io
 import numpy as np
 from tqdm import tqdm
-from torch_geometric.loader import DataLoader, DataListLoader
 from .utilities import ModelKeeper
 import time
-from torch.optim.lr_scheduler import LambdaLR
-import random
+import pickle
 from torch_geometric.nn import DataParallel
 
 from .hypers import save_hypers, set_hypers_from_files
 from .pet import PET, PETMLIPWrapper
-from .utilities import FullLogger
+from .utilities import FullLogger, get_scheduler, load_checkpoint, get_data_loaders
 from .utilities import get_rmse, get_loss, set_reproducibility, get_calc_names
 from .analysis import adapt_hypers
 from .data_preparation import get_self_contributions, get_corrected_energies
@@ -83,19 +81,7 @@ def main():
         update_pyg_graphs(train_graphs, 'forces', train_forces)
         update_pyg_graphs(val_graphs, 'forces', val_forces)
 
-    def seed_worker(worker_id):
-        worker_seed = torch.initial_seed() % 2**32
-        numpy.random.seed(worker_seed)
-        random.seed(worker_seed)
-    g = torch.Generator()
-    g.manual_seed(FITTING_SCHEME.RANDOM_SEED)
-
-    if FITTING_SCHEME.MULTI_GPU:
-        train_loader = DataListLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-        val_loader = DataListLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
-    else:
-        train_loader = DataLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-        val_loader = DataLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+    train_loader, val_loader = get_data_loaders(train_graphs, val_graphs, FITTING_SCHEME)
 
     model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species),
                 FITTING_SCHEME.GLOBAL_AUG).to(device)
@@ -105,26 +91,14 @@ def main():
         model = DataParallel(model)
         model = model.to(torch.device('cuda:0'))
     
-    optim = torch.optim.Adam(model.parameters(), lr = FITTING_SCHEME.INITIAL_LR)
-
-    def func_lr_scheduler(epoch):
-        if epoch < FITTING_SCHEME.EPOCHS_WARMUP:
-            return epoch / FITTING_SCHEME.EPOCHS_WARMUP
-        delta = epoch - FITTING_SCHEME.EPOCHS_WARMUP
-        num_blocks = delta // FITTING_SCHEME.SCHEDULER_STEP_SIZE 
-        return 0.5 ** (num_blocks)
-
-    scheduler = LambdaLR(optim, func_lr_scheduler)
-
     if FITTING_SCHEME.MODEL_TO_START_WITH is not None:
         model.load_state_dict(torch.load(FITTING_SCHEME.MODEL_TO_START_WITH))
 
-    if name_to_load is not None:
-        checkpoint = torch.load(f'results/{name_to_load}/checkpoint')
+    optim = torch.optim.Adam(model.parameters(), lr = FITTING_SCHEME.INITIAL_LR)
+    scheduler = get_scheduler(optim, FITTING_SCHEME)
 
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optim.load_state_dict(checkpoint['optim_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    if name_to_load is not None:
+        load_checkpoint(model, optim, scheduler, f'results/{name_to_load}/checkpoint')
 
     history = []
     if MLIP_SETTINGS.USE_ENERGIES:
@@ -239,7 +213,6 @@ def main():
             if elapsed > FITTING_SCHEME.MAX_TIME:
                 break
 
-    import pickle
     torch.save({
                 'model_state_dict': model.state_dict(),
                 'optim_state_dict': optim.state_dict(),
@@ -248,12 +221,8 @@ def main():
     with open(f'results/{NAME_OF_CALCULATION}/history.pickle', 'wb') as f:
         pickle.dump(history, f)
 
-    torch.save(model.state_dict(), f'results/{NAME_OF_CALCULATION}/last_model_state_dict')
-    # torch.save(model, f'results/{NAME_OF_CALCULATION}/last_model')
-
     def save_model(model_name, model_keeper):
         torch.save(model_keeper.best_model.state_dict(), f'results/{NAME_OF_CALCULATION}/{model_name}_state_dict')
-        # torch.save(model_keeper.best_model, f'results/{NAME_OF_CALCULATION}/{model_name}')
 
     summary = ''
     if MLIP_SETTINGS.USE_ENERGIES:    

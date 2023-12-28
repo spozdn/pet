@@ -2,8 +2,9 @@ import os
 import random
 import torch
 import numpy as np
-
+from torch.optim.lr_scheduler import LambdaLR
 from scipy.spatial.transform import Rotation
+from torch_geometric.loader import DataLoader, DataListLoader
 import copy
 
 
@@ -121,3 +122,39 @@ def get_mae(first, second):
 def get_relative_rmse(predictions, targets):
     rmse = get_rmse(predictions, targets)
     return rmse / get_rmse(np.mean(targets), targets)
+
+
+def get_scheduler(optim, FITTING_SCHEME):
+    def func_lr_scheduler(epoch):
+        if epoch < FITTING_SCHEME.EPOCHS_WARMUP:
+            return epoch / FITTING_SCHEME.EPOCHS_WARMUP
+        delta = epoch - FITTING_SCHEME.EPOCHS_WARMUP
+        num_blocks = delta // FITTING_SCHEME.SCHEDULER_STEP_SIZE 
+        return 0.5 ** (num_blocks)
+
+    scheduler = LambdaLR(optim, func_lr_scheduler)
+    return scheduler
+
+
+def load_checkpoint(model, optim, scheduler, checkpoint_path):
+    checkpoint = torch.load(checkpoint_path)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optim.load_state_dict(checkpoint["optim_state_dict"])
+    scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+
+def get_data_loaders(train_graphs, val_graphs, FITTING_SCHEME):
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        numpy.random.seed(worker_seed)
+        random.seed(worker_seed)
+    g = torch.Generator()
+    g.manual_seed(FITTING_SCHEME.RANDOM_SEED)
+
+    if FITTING_SCHEME.MULTI_GPU:
+        train_loader = DataListLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
+        val_loader = DataListLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+    else:
+        train_loader = DataLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
+        val_loader = DataLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+
+    return train_loader, val_loader
