@@ -35,7 +35,9 @@ def check_is_shallow(hypers):
         
     
 def combine_hypers(provided_hypers, default_hypers):
-    group_keys = ['ARCHITECTURAL_HYPERS', 'FITTING_SCHEME', 'MLIP_SETTINGS']
+    group_keys = ['ARCHITECTURAL_HYPERS', 'FITTING_SCHEME',
+                  'MLIP_SETTINGS', 'GENERAL_TARGET_SETTINGS']
+    
     for key in provided_hypers.keys():
         if key not in group_keys:
             raise ValueError(f"unknown hyper parameter {key}")

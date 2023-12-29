@@ -48,6 +48,33 @@ def get_compositional_features(structures, all_species):
     return result
 
 
+def get_targets(structures, GENERAL_TARGET_SETTINGS):
+    '''Get general targets from structures'''
+
+    targets = []
+    if GENERAL_TARGET_SETTINGS.TARGET_TYPE not in ['structural', 'atomic']:
+        raise ValueError("unknown target type")
+    
+    for structure in structures:
+        if GENERAL_TARGET_SETTINGS.TARGET_TYPE == 'structural':
+            target_now = structure.info[GENERAL_TARGET_SETTINGS.TARGET_KEY]
+            if not isinstance(target_now, np.ndarray):
+                raise ValueError("target must be numpy array")
+            if len(target_now.shape) != 1:
+                raise ValueError("structural target must be 1D array")
+            
+            target_now = target_now[np.newaxis]
+            
+        elif GENERAL_TARGET_SETTINGS.TARGET_TYPE == 'atomic':
+            target_now = structure.arrays[GENERAL_TARGET_SETTINGS.TARGET_KEY]
+            if not isinstance(target_now, np.ndarray):
+                raise ValueError("target must be numpy array")
+            if len(target_now.shape) != 2:
+                raise ValueError("atomic target must be 2D array")
+            
+        targets.append(torch.FloatTensor(target_now))
+    return targets
+        
 def get_self_contributions(energy_key, train_structures, all_species):
     train_energies = np.array(
         [structure.info[energy_key] for structure in train_structures]

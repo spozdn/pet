@@ -39,8 +39,13 @@ FITTING_SCHEME:
   CUDA_DETERMINISTIC: False
   MODEL_TO_START_WITH: None
 
-MLIP_SETTINGS:
+MLIP_SETTINGS: # only used when fitting MLIP
   ENERGY_KEY: energy
   FORCES_KEY: forces
   USE_ENERGIES: True
   USE_FORCES: True
+
+GENERAL_TARGET_SETTINGS: #only used when fitting general target 
+   TARGET_TYPE: structural
+   TARGET_DIM: 42
+   TARGET_KEY: structural_target

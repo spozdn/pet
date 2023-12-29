@@ -13,7 +13,8 @@ setup(
         'console_scripts': [
             'pet_train = pet.train_model:main',
             'pet_run = pet.estimate_error:main',
-            'pet_run_sp = pet.estimate_error_sp:main'
+            'pet_run_sp = pet.estimate_error_sp:main',
+            'pet_train_general_target = pet.train_model_general_target:main',
         ],
     },
     install_requires=requirements,
