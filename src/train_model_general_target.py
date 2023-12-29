@@ -88,7 +88,7 @@ def main():
         load_checkpoint(model, optim, scheduler, f'results/{name_to_load}/checkpoint')
 
     history = []
-    logger = FullLogger()
+    logger = FullLogger(FITTING_SCHEME.SUPPORT_MISSING_VALUES)
     mae_model_keeper = ModelKeeper()
     rmse_model_keeper = ModelKeeper()
 
@@ -103,7 +103,7 @@ def main():
 
             predictions = model(batch, augmentation = True)
             logger.train_logger.update(predictions, batch.targets)
-            loss  = get_loss(predictions, batch.targets)
+            loss  = get_loss(predictions, batch.targets, FITTING_SCHEME.SUPPORT_MISSING_VALUES)
             loss.backward()
             optim.step()
             optim.zero_grad()

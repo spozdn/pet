@@ -102,10 +102,10 @@ def main():
 
     history = []
     if MLIP_SETTINGS.USE_ENERGIES:
-        energies_logger = FullLogger()
+        energies_logger = FullLogger(FITTING_SCHEME.SUPPORT_MISSING_VALUES)
 
     if MLIP_SETTINGS.USE_FORCES:
-        forces_logger = FullLogger()
+        forces_logger = FullLogger(FITTING_SCHEME.SUPPORT_MISSING_VALUES)
 
     if MLIP_SETTINGS.USE_FORCES:
         val_forces = torch.cat(val_forces, dim = 0)
@@ -137,10 +137,10 @@ def main():
             predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = True, create_graph = True)
             if MLIP_SETTINGS.USE_ENERGIES:
                 energies_logger.train_logger.update(predictions_energies, targets_energies)
-                loss_energies = get_loss(predictions_energies, targets_energies)
+                loss_energies = get_loss(predictions_energies, targets_energies, MLIP_SETTINGS.SUPPORT_MISSING_VALUES)
             if MLIP_SETTINGS.USE_FORCES:
                 forces_logger.train_logger.update(predictions_forces, targets_forces)
-                loss_forces = get_loss(predictions_forces, targets_forces)
+                loss_forces = get_loss(predictions_forces, targets_forces, MLIP_SETTINGS.SUPPORT_MISSING_VALUES)
 
             if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES: 
                 loss = FITTING_SCHEME.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)

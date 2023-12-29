@@ -58,9 +58,10 @@ class ModelKeeper:
 
 
 class Logger:
-    def __init__(self):
+    def __init__(self, support_missing_values):
         self.predictions = []
         self.targets = []
+        self.support_missing_values = support_missing_values
 
     def update(self, predictions_now, targets_now):
         self.predictions.append(predictions_now.data.cpu().numpy())
@@ -71,9 +72,12 @@ class Logger:
         self.targets = np.concatenate(self.targets, axis=0)
 
         output = {}
-        output["rmse"] = get_rmse(self.predictions, self.targets)
-        output["mae"] = get_mae(self.predictions, self.targets)
-        output["relative rmse"] = get_relative_rmse(self.predictions, self.targets)
+        output["rmse"] = get_rmse(self.predictions, self.targets, 
+                                  support_missing_values = self.support_missing_values)
+        output["mae"] = get_mae(self.predictions, self.targets,
+                                 support_missing_values = self.support_missing_values)
+        output["relative rmse"] = get_relative_rmse(self.predictions, self.targets,
+                                                    support_missing_values = self.support_missing_values)
 
         self.predictions = []
         self.targets = []
@@ -81,9 +85,9 @@ class Logger:
 
 
 class FullLogger:
-    def __init__(self):
-        self.train_logger = Logger()
-        self.val_logger = Logger()
+    def __init__(self, support_missing_values):
+        self.train_logger = Logger(support_missing_values)
+        self.val_logger = Logger(support_missing_values)
 
     def flush(self):
         return {"train": self.train_logger.flush(), "val": self.val_logger.flush()}
@@ -104,24 +108,47 @@ def get_rotations(indices, global_aug=False):
         return rotations
 
 
-def get_loss(predictions, targets):
-    delta = predictions - targets
-    return torch.mean(delta * delta)
+def get_loss(predictions, targets, support_missing_values):
+    if support_missing_values:
+        delta = predictions - targets
+        mask_nan = torch.isnan(targets)
+        delta[mask_nan] = 0.0
+        mask_not_nan = torch.logical_not(mask_nan)
+        return torch.sum(delta * delta) / torch.sum(mask_not_nan)
+    else:
+        delta = predictions - targets
+        return torch.mean(delta * delta)
 
 
-def get_rmse(first, second):
-    delta = first - second
-    return np.sqrt(np.mean(delta * delta))
+def get_rmse(predictions, targets, support_missing_values = False):
+    if support_missing_values:
+        delta = predictions - targets
+        mask_nan = np.isnan(targets)
+        delta[mask_nan] = 0.0
+        mask_not_nan = np.logical_not(mask_nan)
+        return np.sqrt(np.sum(delta * delta) / np.sum(mask_not_nan))
+    else:    
+        delta = predictions - targets
+        return np.sqrt(np.mean(delta * delta))
 
 
-def get_mae(first, second):
-    delta = first - second
-    return np.mean(np.abs(delta))
+def get_mae(predictions, targets, support_missing_values = False):
+    if support_missing_values:
+        delta = predictions - targets
+        mask_nan = np.isnan(targets)
+        delta[mask_nan] = 0.0
+        mask_not_nan = np.logical_not(mask_nan)
+        return np.sum(np.abs(delta)) / np.sum(mask_not_nan)
+    else:
+        delta = predictions - targets
+        return np.mean(np.abs(delta))
 
 
-def get_relative_rmse(predictions, targets):
-    rmse = get_rmse(predictions, targets)
-    return rmse / get_rmse(np.mean(targets), targets)
+def get_relative_rmse(predictions, targets, support_missing_values = False):
+    rmse = get_rmse(predictions, targets, 
+                    support_missing_values = support_missing_values)
+    return rmse / get_rmse(np.mean(targets), targets,
+                            support_missing_values = support_missing_values)
 
 
 def get_scheduler(optim, FITTING_SCHEME):
