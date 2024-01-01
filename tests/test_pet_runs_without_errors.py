@@ -88,7 +88,6 @@ def test_pet_run(prepare_model):
         model_folder,
         "best_val_rmse_both_model",
         "1",
-        "../default_hypers/default_hypers.yaml",
         "100",
     ]
 

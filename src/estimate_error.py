@@ -20,11 +20,10 @@ def main():
 
     parser.add_argument("structures_path", help="Path to an xyz file with structures", type = str)
     parser.add_argument("path_to_calc_folder", help="Path to a folder with a model to use", type = str)
-    parser.add_argument("checkpoint", help="Path to a particular checkpoint to use", type = str, choices = ['best_val_mae_energies_model', 'best_val_rmse_energies_model', 'best_val_mae_forces_model', 'best_val_rmse_forces_model',  'best_val_mae_both_model', 'best_val_rmse_both_model'])
+    parser.add_argument("checkpoint", help="Path to a particular checkpoint to use", type = str)
 
     parser.add_argument("n_aug", type = int, help = "A number of rotational augmentations to use. It should be a positive integer or -1. If -1, the initial coordinate system will be used, not a single random one, as in the n_aug = 1 case")
-    parser.add_argument("default_hypers_path", help="Path to a YAML file with default hypers", type = str)
-
+    
     parser.add_argument("batch_size", type = int, help="Batch size to use for inference. It should be a positive integer or -1. If -1, it will be set to the value used for fitting the provided model.")
 
     parser.add_argument("--path_save_predictions", help="Path to a folder where to save predictions.", type = str)
@@ -89,8 +88,10 @@ def main():
     for batch in loader:
         if not FITTING_SCHEME.MULTI_GPU:
             batch.to(device)
-
-        _ = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
+        if hypers.UTILITY_FLAGS.CALCULATION_TYPE == 'mlip':
+            _ = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
+        else:
+            _ = model(batch, augmentation = USE_AUGMENTATION)
         break
 
     begin = time.time()
@@ -102,7 +103,11 @@ def main():
             if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
-            predictions_batch = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
+            if hypers.UTILITY_FLAGS.CALCULATION_TYPE == 'mlip':
+                predictions_batch = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
+            else:
+                predictions_batch = model(batch, augmentation = USE_AUGMENTATION)
+            
             batch_accumulator.update(predictions_batch)
         predictions = batch_accumulator.flush()
         for index in range(len(predictions)):
@@ -111,13 +116,13 @@ def main():
         aug_accumulator.update(predictions)
 
     all_predictions = aug_accumulator.flush()
-    all_energies_predicted, all_forces_predicted = all_predictions
 
     total_time = time.time() - begin
     n_atoms = np.array([len(struc.positions) for struc in structures])
     time_per_atom = total_time / (np.sum(n_atoms) * N_AUG)
 
     if hypers.UTILITY_FLAGS.CALCULATION_TYPE == 'mlip':
+        all_energies_predicted, all_forces_predicted = all_predictions
         MLIP_SETTINGS = hypers.MLIP_SETTINGS
         if MLIP_SETTINGS.USE_ENERGIES:
             self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
@@ -133,14 +138,16 @@ def main():
 
             report_accuracy(all_energies_predicted, energies_ground_truth, "energies",
                             args.verbose, specify_per_component = False,
-                            target_type = 'structural', n_atoms = n_atoms)
+                            target_type = 'structural', n_atoms = n_atoms,
+                            support_missing_values=FITTING_SCHEME.SUPPORT_MISSING_VALUES)
 
         if MLIP_SETTINGS.USE_FORCES:
             forces_ground_truth = [struc.arrays[MLIP_SETTINGS.FORCES_KEY] for struc in structures]
             forces_ground_truth = np.concatenate(forces_ground_truth, axis = 0)
             report_accuracy(all_forces_predicted, forces_ground_truth, "forces",
                             args.verbose, specify_per_component = True,
-                            target_type = 'atomic', n_atoms = n_atoms)
+                            target_type = 'atomic', n_atoms = n_atoms,
+                            support_missing_values=FITTING_SCHEME.SUPPORT_MISSING_VALUES)
             
     if hypers.UTILITY_FLAGS.CALCULATION_TYPE == 'general_target':
         if len(all_predictions) != 1:
@@ -153,7 +160,8 @@ def main():
 
         report_accuracy(all_targets_predicted, ground_truth, GENERAL_TARGET_SETTINGS.TARGET_KEY,
                         args.verbose, specify_per_component = True,
-                        target_type = GENERAL_TARGET_SETTINGS.TARGET_TYPE, n_atoms = n_atoms)
+                        target_type = GENERAL_TARGET_SETTINGS.TARGET_TYPE, n_atoms = n_atoms,
+                        support_missing_values=FITTING_SCHEME.SUPPORT_MISSING_VALUES)
 
     if args.verbose:
         print(f"approximate time per atom not including neighbor list construction for batch size of {args.batch_size}: {time_per_atom} seconds")

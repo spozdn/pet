@@ -233,15 +233,16 @@ def get_rotational_discrepancy(all_predictions):
 
 def report_accuracy(all_predictions, ground_truth, target_name,
                     verbose, specify_per_component,
-                    target_type, n_atoms = None):
+                    target_type, n_atoms = None,
+                    support_missing_values = False):
     predictions_mean = np.mean(all_predictions, axis=0)
 
     if specify_per_component:
         specification = "per component"
     else:
         specification = ""
-    print(f"{target_name} mae {specification}: {get_mae(predictions_mean, ground_truth)}")
-    print(f"{target_name} rmse {specification}: {get_rmse(predictions_mean, ground_truth)}")
+    print(f"{target_name} mae {specification}: {get_mae(predictions_mean, ground_truth, support_missing_values = support_missing_values)}")
+    print(f"{target_name} rmse {specification}: {get_rmse(predictions_mean, ground_truth, support_missing_values=support_missing_values)}")
 
     if all_predictions.shape[0] > 1:
         predictions_std = get_rotational_discrepancy(all_predictions)
@@ -249,17 +250,24 @@ def report_accuracy(all_predictions, ground_truth, target_name,
             print(f"{target_name} rotational discrepancy std {specification}: {predictions_std} ")
 
     if target_type == 'structural':
-        predictions_mean_per_atom = predictions_mean / n_atoms
-        ground_truth_per_atom = ground_truth / n_atoms
+        if len(predictions_mean.shape) == 1:
+            predictions_mean = predictions_mean[:, np.newaxis]
+        if len(ground_truth.shape) == 1:
+            ground_truth = ground_truth[:, np.newaxis]
 
-        print(f"{target_name} mae per atom {specification}: {get_mae(predictions_mean_per_atom, ground_truth_per_atom)}")
-        print(f"{target_name} rmse per atom {specification}: {get_rmse(predictions_mean_per_atom, ground_truth_per_atom)}")
+        predictions_mean_per_atom = predictions_mean / n_atoms[:, np.newaxis]
+        ground_truth_per_atom = ground_truth / n_atoms[:, np.newaxis]
+
+        print(f"{target_name} mae per atom {specification}: {get_mae(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values = support_missing_values)}")
+        print(f"{target_name} rmse per atom {specification}: {get_rmse(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values=support_missing_values)}")
 
         if all_predictions.shape[0] > 1:
-            all_predictions_per_atom = all_predictions / n_atoms[np.newaxis, :]
+            if len(all_predictions.shape) == 2:
+                all_predictions = all_predictions[:, :, np.newaxis]
+            all_predictions_per_atom = all_predictions / n_atoms[np.newaxis, :, np.newaxis]
             predictions_std_per_atom = get_rotational_discrepancy(all_predictions_per_atom)
             if verbose:
                 print(f"{target_name} rotational discrepancy std per atom {specification}: {predictions_std_per_atom} ")
             
-            
+
 
