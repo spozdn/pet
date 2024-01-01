@@ -57,6 +57,44 @@ class ModelKeeper:
             self.additional_info = additional_info
 
 
+class Accumulator:
+    def __init__(self):
+        self.values = None
+
+    def update(self, values_now):
+        if isinstance(values_now, torch.Tensor):
+            values_now = [values_now]
+        
+        if self.values is None:
+            self.values = [[] for _ in range(len(values_now))]
+
+        for index, value_now in enumerate(values_now):
+            if isinstance(value_now, torch.Tensor):
+                value_now = value_now.data.cpu().numpy()
+            self.values[index].append(value_now)
+
+    def consist_of_nones(self, el):
+        has_none = False
+        has_value = False
+        for index in range(len(el)):
+            if el[index] is None:
+                has_none = True
+            else:
+                has_value = True
+        if has_none and has_value:
+            raise ValueError("Some values are None, some are not")
+        return has_none
+
+    def flush(self):
+        result = []
+        for el in self.values:
+            if self.consist_of_nones(el):
+                result.append(None)
+            else:
+                result.append(np.concatenate(el, axis=0))
+        self.values = None
+        return result
+    
 class Logger:
     def __init__(self, support_missing_values):
         self.predictions = []
@@ -185,3 +223,43 @@ def get_data_loaders(train_graphs, val_graphs, FITTING_SCHEME):
         val_loader = DataLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
 
     return train_loader, val_loader
+
+def get_rotational_discrepancy(all_predictions):
+    predictions_mean = np.mean(all_predictions, axis=0)
+    predictions_discrepancies = all_predictions - predictions_mean[np.newaxis]
+    correction = all_predictions.shape[0] / (all_predictions.shape[0] - 1)
+    predictions_std = np.sqrt(np.mean(predictions_discrepancies ** 2) * correction)
+    return predictions_std
+
+def report_accuracy(all_predictions, ground_truth, target_name,
+                    verbose, specify_per_component,
+                    target_type, n_atoms = None):
+    predictions_mean = np.mean(all_predictions, axis=0)
+
+    if specify_per_component:
+        specification = "per component"
+    else:
+        specification = ""
+    print(f"{target_name} mae {specification}: {get_mae(predictions_mean, ground_truth)}")
+    print(f"{target_name} rmse {specification}: {get_rmse(predictions_mean, ground_truth)}")
+
+    if all_predictions.shape[0] > 1:
+        predictions_std = get_rotational_discrepancy(all_predictions)
+        if verbose:
+            print(f"{target_name} rotational discrepancy std {specification}: {predictions_std} ")
+
+    if target_type == 'structural':
+        predictions_mean_per_atom = predictions_mean / n_atoms
+        ground_truth_per_atom = ground_truth / n_atoms
+
+        print(f"{target_name} mae per atom {specification}: {get_mae(predictions_mean_per_atom, ground_truth_per_atom)}")
+        print(f"{target_name} rmse per atom {specification}: {get_rmse(predictions_mean_per_atom, ground_truth_per_atom)}")
+
+        if all_predictions.shape[0] > 1:
+            all_predictions_per_atom = all_predictions / n_atoms[np.newaxis, :]
+            predictions_std_per_atom = get_rotational_discrepancy(all_predictions_per_atom)
+            if verbose:
+                print(f"{target_name} rotational discrepancy std per atom {specification}: {predictions_std_per_atom} ")
+            
+            
+

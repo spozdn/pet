@@ -55,6 +55,7 @@ def main():
 
     os.mkdir(f'results/{NAME_OF_CALCULATION}')
     np.save(f'results/{NAME_OF_CALCULATION}/all_species.npy', all_species)
+    hypers.UTILITY_FLAGS.CALCULATION_TYPE = 'general_target'
     save_hypers(hypers, f"results/{NAME_OF_CALCULATION}/hypers_used.yaml")
 
     print(len(train_structures))

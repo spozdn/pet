@@ -32,11 +32,11 @@ def check_is_shallow(hypers):
     for key in hypers.keys():
         if isinstance(hypers[key], dict):
             raise ValueError("Nesting of more than two is not supported")
-        
-    
+
 def combine_hypers(provided_hypers, default_hypers):
     group_keys = ['ARCHITECTURAL_HYPERS', 'FITTING_SCHEME',
-                  'MLIP_SETTINGS', 'GENERAL_TARGET_SETTINGS']
+                  'MLIP_SETTINGS', 'GENERAL_TARGET_SETTINGS',
+                  'UTILITY_FLAGS']
     
     for key in provided_hypers.keys():
         if key not in group_keys:

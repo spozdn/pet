@@ -34,7 +34,7 @@ class SingleStructCalculator():
         model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
         if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
             model = DataParallel(model)
-            model = model.to( torch.device('cuda:0'))
+            model = model.to(torch.device('cuda:0'))
 
         model.load_state_dict(torch.load(path_to_model_state_dict, map_location=torch.device(device)))
         model.eval()
@@ -49,9 +49,8 @@ class SingleStructCalculator():
                             self.architectural_hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
         
         graph = molecule.get_graph(molecule.get_max_num(), self.all_species)
-        graph.y = 0
-        graph.forces = np.zeros_like(structure.positions)
-        prediction_energy, _, prediction_forces, _ = self.model(graph, augmentation = False, create_graph = False)
+       
+        prediction_energy, prediction_forces = self.model(graph, augmentation = False, create_graph = False)
 
         compositional_features = get_compositional_features([structure], self.all_species)[0]
         self_contributions_energy = np.dot(compositional_features, self.self_contributions)

@@ -490,16 +490,12 @@ class PETMLIPWrapper(torch.nn.Module):
         result = []
         if self.use_energies:
             result.append(predictions)
-            result.append(batch.y)
         else:
-            result.append(None)
             result.append(None)
             
         if self.use_forces:
             result.append(first - second)
-            result.append(batch.forces)
         else:
-            result.append(None)
             result.append(None)
             
         return result

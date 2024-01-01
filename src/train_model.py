@@ -56,6 +56,7 @@ def main():
 
     os.mkdir(f'results/{NAME_OF_CALCULATION}')
     np.save(f'results/{NAME_OF_CALCULATION}/all_species.npy', all_species)
+    hypers.UTILITY_FLAGS.CALCULATION_TYPE = 'mlip'
     save_hypers(hypers, f"results/{NAME_OF_CALCULATION}/hypers_used.yaml")
 
     print(len(train_structures))
@@ -134,13 +135,13 @@ def main():
             if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
-            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = True, create_graph = True)
+            predictions_energies, predictions_forces = model(batch, augmentation = True, create_graph = True)
             if MLIP_SETTINGS.USE_ENERGIES:
-                energies_logger.train_logger.update(predictions_energies, targets_energies)
-                loss_energies = get_loss(predictions_energies, targets_energies, MLIP_SETTINGS.SUPPORT_MISSING_VALUES)
+                energies_logger.train_logger.update(predictions_energies, batch.y)
+                loss_energies = get_loss(predictions_energies, batch.y, FITTING_SCHEME.SUPPORT_MISSING_VALUES)
             if MLIP_SETTINGS.USE_FORCES:
-                forces_logger.train_logger.update(predictions_forces, targets_forces)
-                loss_forces = get_loss(predictions_forces, targets_forces, MLIP_SETTINGS.SUPPORT_MISSING_VALUES)
+                forces_logger.train_logger.update(predictions_forces, batch.forces)
+                loss_forces = get_loss(predictions_forces, batch.forces, FITTING_SCHEME.SUPPORT_MISSING_VALUES)
 
             if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES: 
                 loss = FITTING_SCHEME.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
@@ -160,11 +161,11 @@ def main():
             if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
-            predictions_energies, targets_energies, predictions_forces, targets_forces = model(batch, augmentation = False, create_graph = False)
+            predictions_energies, predictions_forces = model(batch, augmentation = False, create_graph = False)
             if MLIP_SETTINGS.USE_ENERGIES:
-                energies_logger.val_logger.update(predictions_energies, targets_energies)
+                energies_logger.val_logger.update(predictions_energies, batch.y)
             if MLIP_SETTINGS.USE_FORCES:
-                forces_logger.val_logger.update(predictions_forces, targets_forces)
+                forces_logger.val_logger.update(predictions_forces, batch.forces)
 
         now = {}
         if MLIP_SETTINGS.USE_ENERGIES:
