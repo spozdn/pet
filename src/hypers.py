@@ -68,7 +68,7 @@ def combine_hypers(provided_hypers, default_hypers):
         raise ValueError("At least one of the energies and forces should be used for fitting")
         
     if (not result['MLIP_SETTINGS']['USE_ENERGIES']) or (not result['MLIP_SETTINGS']['USE_FORCES']):
-        if (result['MLIP_SETTINGS']['ENERGY_WEIGHT'] is not None):
+        if (result['FITTING_SCHEME']['ENERGY_WEIGHT'] is not None):
             warnings.warn("ENERGY_WEIGHT was provided, but in the current calculation, it doesn't affect anything since only one target of energies and forces is used")
 
     if result['ARCHITECTURAL_HYPERS']['USE_ADDITIONAL_SCALAR_ATTRIBUTES']:
