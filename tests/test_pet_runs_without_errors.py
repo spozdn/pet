@@ -49,7 +49,13 @@ def prepare_model():
     return model_folder
 
 
-def test_pet_train():
+@pytest.mark.parametrize("hypers_path", ["hypers_minimal.yaml",
+                                         "hypers_minimal_weight_decay.yaml",
+                                         "hypers_minimal_preln.yaml",
+                                         "hypers_minimal_only_forces.yaml",
+                                         "hypers_minimal_only_energies.yaml",
+                                         "hypers_minimal_gradient_clipping.yaml"])
+def test_pet_train(hypers_path):
     """
     Test the 'pet_train' script for successful execution.
 
@@ -62,7 +68,7 @@ def test_pet_train():
     args = [
         "../example/methane_train.xyz",
         "../example/methane_val.xyz",
-        "hypers_minimal.yaml",
+        hypers_path,
         "../default_hypers/default_hypers.yaml",
         "test",
     ]
