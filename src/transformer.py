@@ -49,11 +49,15 @@ class AttentionBlock(nn.Module):
     
 class TransformerLayer(torch.nn.Module):
     def __init__(self, d_model, n_heads, dim_feedforward = 512, dropout = 0.0,
-                 activation = F.silu):
+                 activation = F.silu, transformer_type = 'PostLN'):
         
         super(TransformerLayer, self).__init__()
         self.attention = AttentionBlock(d_model, n_heads, dropout = dropout) 
         
+        if transformer_type not in ['PostLN', 'PreLN']:
+            raise ValueError("unknown transformer type")
+        self.transformer_type = transformer_type
+
         self.norm_attention = nn.LayerNorm(d_model)
         self.norm_mlp = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)        
@@ -68,8 +72,12 @@ class TransformerLayer(torch.nn.Module):
 
 
     def forward(self, x, multipliers = None): 
-        x = self.norm_attention(x + self.dropout(self.attention(x, multipliers)))
-        x = self.norm_mlp(x + self.mlp(x))
+        if self.transformer_type == 'PostLN':
+            x = self.norm_attention(x + self.dropout(self.attention(x, multipliers)))
+            x = self.norm_mlp(x + self.mlp(x))
+        if self.transformer_type == 'PreLN':
+            x = x + self.dropout(self.attention(self.norm_attention(x), multipliers))
+            x = x + self.mlp(self.norm_mlp(x))
         return x
 
 class Transformer(torch.nn.Module):

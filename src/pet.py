@@ -90,7 +90,8 @@ class CartesianTransformer(torch.nn.Module):
         self.trans_layer = TransformerLayer(d_model=d_model, n_heads = n_head,
                                                 dim_feedforward = dim_feedforward,
                                                         dropout = dropout,
-                                                        activation = get_activation(hypers))
+                                                        activation = get_activation(hypers),
+                                                        transformer_type = hypers.TRANSFORMER_TYPE)
         self.trans = Transformer(self.trans_layer, 
                                                    num_layers=n_layers)
         
