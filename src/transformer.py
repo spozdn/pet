@@ -57,7 +57,7 @@ class TransformerLayer(torch.nn.Module):
         if transformer_type not in ['PostLN', 'PreLN']:
             raise ValueError("unknown transformer type")
         self.transformer_type = transformer_type
-
+        self.d_model = d_model
         self.norm_attention = nn.LayerNorm(d_model)
         self.norm_mlp = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)        
@@ -83,11 +83,15 @@ class TransformerLayer(torch.nn.Module):
 class Transformer(torch.nn.Module):
     def __init__(self, trans_layer, num_layers):
         super(Transformer, self).__init__()
+        self.transformer_type = trans_layer.transformer_type
+        if trans_layer.transformer_type == 'PreLN':
+            self.final_norm = nn.LayerNorm(trans_layer.d_model)
         self.layers = [copy.deepcopy(trans_layer) for _ in range(num_layers)]
         self.layers = nn.ModuleList(self.layers)
-        
 
     def forward(self, x, multipliers = None):  
         for layer in self.layers:           
-            x = layer(x, multipliers) 
+            x = layer(x, multipliers)
+        if self.transformer_type == 'PreLN':
+            x = self.final_norm(x)
         return x
