@@ -224,6 +224,15 @@ def get_data_loaders(train_graphs, val_graphs, FITTING_SCHEME):
 
     return train_loader, val_loader
 
+def get_optimizer(model, FITTING_SCHEME):
+    if FITTING_SCHEME.USE_WEIGHT_DECAY:
+        optim = torch.optim.AdamW(model.parameters(), 
+                                lr = FITTING_SCHEME.INITIAL_LR,
+                                weight_decay = FITTING_SCHEME.WEIGHT_DECAY)
+    else:
+        optim = torch.optim.Adam(model.parameters(), lr = FITTING_SCHEME.INITIAL_LR)
+    return optim
+
 def get_rotational_discrepancy(all_predictions):
     predictions_mean = np.mean(all_predictions, axis=0)
     predictions_discrepancies = all_predictions - predictions_mean[np.newaxis]

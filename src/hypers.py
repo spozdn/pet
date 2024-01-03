@@ -66,7 +66,7 @@ def combine_hypers(provided_hypers, default_hypers):
     
     if (not result['MLIP_SETTINGS']['USE_ENERGIES']) and (not result['MLIP_SETTINGS']['USE_FORCES']):
         raise ValueError("At least one of the energies and forces should be used for fitting")
-        
+       
     if (not result['MLIP_SETTINGS']['USE_ENERGIES']) or (not result['MLIP_SETTINGS']['USE_FORCES']):
         if (result['FITTING_SCHEME']['ENERGY_WEIGHT'] is not None):
             warnings.warn("ENERGY_WEIGHT was provided, but in the current calculation, it doesn't affect anything since only one target of energies and forces is used")
@@ -75,6 +75,9 @@ def combine_hypers(provided_hypers, default_hypers):
         if result['ARCHITECTURAL_HYPERS']['SCALAR_ATTRIBUTES_SIZE'] is None:
             raise ValueError("scalar attributes size must be provided if use_additional_scalar_attributes == True")
         
+    if result['FITTING_SCHEME']['DO_GRADIENT_CLIPPING']:
+        if result['FITTING_SCHEME']['GRADIENT_CLIPPING_MAX_NORM'] is None:
+            raise ValueError("gradient clipping max_norm must be provided if do_gradient_clipping == True")
     return result
 
 def combine_hypers_shallow(provided_hypers, default_hypers,

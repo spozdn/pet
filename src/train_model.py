@@ -14,6 +14,7 @@ from .hypers import save_hypers, set_hypers_from_files
 from .pet import PET, PETMLIPWrapper
 from .utilities import FullLogger, get_scheduler, load_checkpoint, get_data_loaders
 from .utilities import get_rmse, get_loss, set_reproducibility, get_calc_names
+from .utilities import get_optimizer
 from .analysis import adapt_hypers
 from .data_preparation import get_self_contributions, get_corrected_energies
 import argparse
@@ -95,7 +96,7 @@ def main():
     if FITTING_SCHEME.MODEL_TO_START_WITH is not None:
         model.load_state_dict(torch.load(FITTING_SCHEME.MODEL_TO_START_WITH))
 
-    optim = torch.optim.Adam(model.parameters(), lr = FITTING_SCHEME.INITIAL_LR)
+    optim = get_optimizer(model, FITTING_SCHEME)
     scheduler = get_scheduler(optim, FITTING_SCHEME)
 
     if name_to_load is not None:
@@ -152,7 +153,9 @@ def main():
             if MLIP_SETTINGS.USE_FORCES and (not MLIP_SETTINGS.USE_ENERGIES):
                 loss_forces.backward()
 
-
+            if FITTING_SCHEME.DO_GRADIENT_CLIPPING:
+                torch.nn.utils.clip_grad_norm_(model.parameters(),
+                                               max_norm = FITTING_SCHEME.GRADIENT_CLIPPING_MAX_NORM)
             optim.step()
             optim.zero_grad()
 

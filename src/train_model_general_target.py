@@ -14,6 +14,7 @@ from .hypers import save_hypers, set_hypers_from_files
 from .pet import PET, PETMLIPWrapper
 from .utilities import FullLogger, get_scheduler, load_checkpoint, get_data_loaders
 from .utilities import get_loss, set_reproducibility, get_calc_names
+from .utilities import get_optimizer
 from .analysis import adapt_hypers
 import argparse
 from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_targets
@@ -82,7 +83,7 @@ def main():
     if FITTING_SCHEME.MODEL_TO_START_WITH is not None:
         model.load_state_dict(torch.load(FITTING_SCHEME.MODEL_TO_START_WITH))
 
-    optim = torch.optim.Adam(model.parameters(), lr = FITTING_SCHEME.INITIAL_LR)
+    optim = get_optimizer(model, FITTING_SCHEME)
     scheduler = get_scheduler(optim, FITTING_SCHEME)
 
     if name_to_load is not None:
@@ -106,6 +107,9 @@ def main():
             logger.train_logger.update(predictions, batch.targets)
             loss  = get_loss(predictions, batch.targets, FITTING_SCHEME.SUPPORT_MISSING_VALUES)
             loss.backward()
+            if FITTING_SCHEME.DO_GRADIENT_CLIPPING:
+                torch.nn.utils.clip_grad_norm_(model.parameters(),
+                                               max_norm = FITTING_SCHEME.GRADIENT_CLIPPING_MAX_NORM)
             optim.step()
             optim.zero_grad()
 
