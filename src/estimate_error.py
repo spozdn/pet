@@ -149,6 +149,14 @@ def main():
                             target_type = 'atomic', n_atoms = n_atoms,
                             support_missing_values=FITTING_SCHEME.SUPPORT_MISSING_VALUES)
             
+        if args.path_save_predictions is not None:
+            energies_predicted_mean = np.mean(all_energies_predicted, axis = 0)
+            forces_predicted_mean = np.mean(all_forces_predicted, axis = 0)
+            if MLIP_SETTINGS.USE_ENERGIES:
+                np.save(args.path_save_predictions + '/energies_predicted.npy', energies_predicted_mean)
+            if MLIP_SETTINGS.USE_FORCES:
+                np.save(args.path_save_predictions + '/forces_predicted.npy', forces_predicted_mean)
+            
     if hypers.UTILITY_FLAGS.CALCULATION_TYPE == 'general_target':
         if len(all_predictions) != 1:
             raise ValueError("for general target model should predict only one target")
@@ -162,6 +170,10 @@ def main():
                         args.verbose, specify_per_component = True,
                         target_type = GENERAL_TARGET_SETTINGS.TARGET_TYPE, n_atoms = n_atoms,
                         support_missing_values=FITTING_SCHEME.SUPPORT_MISSING_VALUES)
+        
+        if args.path_save_predictions is not None:
+            targets_predicted_mean = np.mean(all_targets_predicted, axis = 0)
+            np.save(args.path_save_predictions + '/targets_predicted.npy', targets_predicted_mean)
 
     if args.verbose:
         print(f"approximate time per atom not including neighbor list construction for batch size of {args.batch_size}: {time_per_atom} seconds")
@@ -170,12 +182,6 @@ def main():
         print(f"approximate time to compute energies per atom: {time_per_atom} seconds")
     else:
         print(f"approximate time to compute energies and forces per atom: {time_per_atom} seconds")'''
-
-    if args.path_save_predictions is not None:
-        if MLIP_SETTINGS.USE_ENERGIES:
-            np.save(args.path_save_predictions + '/energies_predicted.npy', energies_predicted_mean)
-        if MLIP_SETTINGS.USE_FORCES:
-            np.save(args.path_save_predictions + '/forces_predicted.npy', forces_predicted_mean)
 
 if __name__ == "__main__":
     main()
