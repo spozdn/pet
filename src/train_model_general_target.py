@@ -11,7 +11,7 @@ import pickle
 from torch_geometric.nn import DataParallel
 
 from .hypers import save_hypers, set_hypers_from_files
-from .pet import PET, PETMLIPWrapper
+from .pet import PET
 from .utilities import FullLogger, get_scheduler, load_checkpoint, get_data_loaders
 from .utilities import get_loss, set_reproducibility, get_calc_names
 from .utilities import get_optimizer
@@ -105,7 +105,7 @@ def main():
 
             predictions = model(batch, augmentation = True)
             logger.train_logger.update(predictions, batch.targets)
-            loss  = get_loss(predictions, batch.targets, FITTING_SCHEME.SUPPORT_MISSING_VALUES)
+            loss  = get_loss(predictions, batch.targets, FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS)
             loss.backward()
             if FITTING_SCHEME.DO_GRADIENT_CLIPPING:
                 torch.nn.utils.clip_grad_norm_(model.parameters(),

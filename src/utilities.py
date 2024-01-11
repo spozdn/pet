@@ -154,16 +154,22 @@ def get_shift_agnostic_loss(predictions, targets):
     result = torch.mean(losses)
     return result
 
-def get_loss(predictions, targets, support_missing_values):
-    if support_missing_values:
-        delta = predictions - targets
-        mask_nan = torch.isnan(targets)
-        delta[mask_nan] = 0.0
-        mask_not_nan = torch.logical_not(mask_nan)
-        return torch.sum(delta * delta) / torch.sum(mask_not_nan)
+def get_loss(predictions, targets, support_missing_values, use_shift_agnostic_loss):
+    if use_shift_agnostic_loss:
+        if support_missing_values:
+            raise NotImplementedError("shift agnostic loss is not yet supported with missing values")
+        else:
+            return get_shift_agnostic_loss(predictions, targets)
     else:
-        delta = predictions - targets
-        return torch.mean(delta * delta)
+        if support_missing_values:
+            delta = predictions - targets
+            mask_nan = torch.isnan(targets)
+            delta[mask_nan] = 0.0
+            mask_not_nan = torch.logical_not(mask_nan)
+            return torch.sum(delta * delta) / torch.sum(mask_not_nan)
+        else:
+            delta = predictions - targets
+            return torch.mean(delta * delta)
 
 
 def get_rmse(predictions, targets, support_missing_values = False):

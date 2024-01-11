@@ -38,6 +38,9 @@ def main():
     MLIP_SETTINGS = hypers.MLIP_SETTINGS
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
 
+    if FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS:
+        raise ValueError("shift agnostic loss is intended only for general target training")
+
     ARCHITECTURAL_HYPERS.D_OUTPUT = 1 # energy is a single scalar
     ARCHITECTURAL_HYPERS.TARGET_TYPE = 'structural'  # energy is structural property
 
@@ -139,10 +142,10 @@ def main():
             predictions_energies, predictions_forces = model(batch, augmentation = True, create_graph = True)
             if MLIP_SETTINGS.USE_ENERGIES:
                 energies_logger.train_logger.update(predictions_energies, batch.y)
-                loss_energies = get_loss(predictions_energies, batch.y, FITTING_SCHEME.SUPPORT_MISSING_VALUES)
+                loss_energies = get_loss(predictions_energies, batch.y, FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS)
             if MLIP_SETTINGS.USE_FORCES:
                 forces_logger.train_logger.update(predictions_forces, batch.forces)
-                loss_forces = get_loss(predictions_forces, batch.forces, FITTING_SCHEME.SUPPORT_MISSING_VALUES)
+                loss_forces = get_loss(predictions_forces, batch.forces, FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS)
 
             if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES: 
                 loss = FITTING_SCHEME.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
