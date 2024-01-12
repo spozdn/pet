@@ -43,6 +43,7 @@ def main():
 
     ARCHITECTURAL_HYPERS.D_OUTPUT = 1 # energy is a single scalar
     ARCHITECTURAL_HYPERS.TARGET_TYPE = 'structural'  # energy is structural property
+    ARCHITECTURAL_HYPERS.TARGET_AGGREGATION = 'sum'  # energy is a sum of atomic energies
 
     set_reproducibility(FITTING_SCHEME.RANDOM_SEED, FITTING_SCHEME.CUDA_DETERMINISTIC)
 

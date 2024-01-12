@@ -433,8 +433,13 @@ class PET(torch.nn.Module):
                                                                                     mask, nums, bond_head, central_species)
        
         if self.hypers.TARGET_TYPE == 'structural':
-            return torch_geometric.nn.global_add_pool(atomic_predictions,
+            if self.hypers.TARGET_AGGREGATION == 'sum':
+                return torch_geometric.nn.global_add_pool(atomic_predictions,
                                                   batch=batch_dict['batch'])
+            if self.hypers.TARGET_AGGREGATION == 'mean':
+                return torch_geometric.nn.global_mean_pool(atomic_predictions,
+                                                  batch=batch_dict['batch'])
+            raise ValueError("unknown target aggregation")
         if self.hypers.TARGET_TYPE == 'atomic':
             return atomic_predictions
         raise ValueError("unknown target type")
@@ -462,6 +467,8 @@ class PETMLIPWrapper(torch.nn.Module):
             raise ValueError("D_OUTPUT should be 1 for MLIP; energy is a single scalar")
         if self.model.hypers.TARGET_TYPE != 'structural':
             raise ValueError("TARGET_TYPE should be structural for MLIP")
+        if self.model.hypers.TARGET_AGGREGATION != 'sum':
+            raise ValueError("TARGET_AGGREGATION should be sum for MLIP")
     
     def get_predictions(self, batch, augmentation):
         predictions = self.model(batch, augmentation = augmentation)
