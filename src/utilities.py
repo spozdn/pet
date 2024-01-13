@@ -146,9 +146,16 @@ def get_rotations(indices, global_aug=False):
         return rotations
 
 def get_shift_agnostic_loss(predictions, targets):
-    targets_unfolded = targets.unfold(1, predictions.shape[1], 1)
-    predictions_expanded = predictions[:, None, :]
-    delta = predictions_expanded - targets_unfolded
+    if predictions.shape[1] < targets.shape[1]:
+        smaller = predictions
+        bigger = targets
+    else:
+        smaller = targets
+        bigger = predictions
+
+    bigger_unfolded = bigger.unfold(1, smaller.shape[1], 1)
+    smaller_expanded = smaller[:, None, :]
+    delta = smaller_expanded - bigger_unfolded
     losses = torch.mean(delta * delta, dim = 2)
     losses, _ = torch.min(losses, dim = 1)
     result = torch.mean(losses)

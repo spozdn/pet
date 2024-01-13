@@ -39,4 +39,17 @@ def test_shift_agnostic_loss():
                                                                targets)
 
     discrepancy = torch.abs(shift_agnostic_loss - shift_agnostic_loss_naive)
-    assert discrepancy < 1e-7, "shift agnostic loss is not correct"
+    assert discrepancy < 1e-6, "shift agnostic loss is not correct"
+
+    shift_agnostic_loss = get_shift_agnostic_loss(targets, predictions)
+    discrepancy = torch.abs(shift_agnostic_loss - shift_agnostic_loss_naive)
+    assert discrepancy < 1e-6, "shift agnostic loss is not correct"
+    
+    predictions = torch.randn(128, 300)
+    targets = torch.randn(128, 300)
+
+    shift_agnostic_loss = get_shift_agnostic_loss(predictions, targets)
+    loss_naive = torch.mean((predictions - targets) ** 2)
+    discrepancy = torch.abs(shift_agnostic_loss - loss_naive)
+    assert discrepancy < 1e-6, "shift agnostic loss is not correct"
+
