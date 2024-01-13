@@ -52,7 +52,10 @@ class ModelKeeper:
     def update(self, model_now, error_now, epoch_now, additional_info=None):
         if (self.best_error is None) or (error_now < self.best_error):
             self.best_error = error_now
+            model_now.to('cpu')
             self.best_model = copy.deepcopy(model_now)
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            model_now.to(device)
             self.best_epoch = epoch_now
             self.additional_info = additional_info
 
