@@ -60,7 +60,7 @@ class Molecule():
 
         self.use_long_range = use_long_range
         if self.use_long_range:
-            self.cell = np.array(self.atoms.cell)
+            self.cell = np.array(self.atoms.get_cell())
             w_1, w_2, w_3 = get_reciprocal(self.cell[0], self.cell[1], self.cell[2])
             reciprocal = np.concatenate([w_1[np.newaxis], w_2[np.newaxis], w_3[np.newaxis]], axis = 0)
             self.reciprocal = reciprocal
@@ -139,9 +139,12 @@ class Molecule():
             kwargs['cell'] = torch.FloatTensor(self.cell)[None]
             kwargs['reciprocal'] = torch.FloatTensor(self.reciprocal)[None]
             k_vectors = np.zeros([1, len(max_num_k), 3])
+            k_mask = np.zeros([max_num_k], dtype = bool)
             for index in range(len(self.k_vectors)):
                 k_vectors[0, index] = self.k_vectors[index]
+                k_mask[index] = True
             kwargs['k_vectors'] = torch.FloatTensor(k_vectors)
+            kwargs['k_mask'] = torch.BoolTensor(k_mask)[None]
 
         result = Data(**kwargs)
     
