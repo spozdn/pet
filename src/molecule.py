@@ -9,39 +9,31 @@ class Molecule():
     def __init__(self, atoms, r_cut, use_additional_scalar_attributes):
         
         self.use_additional_scalar_attributes = use_additional_scalar_attributes
-        
-        
+             
         self.atoms = atoms
         
-
         positions = self.atoms.get_positions()
         species = self.atoms.get_atomic_numbers()
         
         self.central_species = []
         for i in range(len(positions)):
             self.central_species.append(species[i])
-            
-            
+                   
         if use_additional_scalar_attributes:
             scalar_attributes = self.atoms.arrays['scalar_attributes']
             if len(scalar_attributes.shape) == 1:
                 scalar_attributes = scalar_attributes[:, np.newaxis]
         
             self.central_scalar_attributes = scalar_attributes
-            
-
-        
+               
         i_list, j_list, D_list, S_list = ase.neighborlist.neighbor_list('ijDS', atoms, r_cut)
-        
-       
+            
         self.neighbors_index = [[] for i in range(len(positions))]
         self.neighbors_shift = [[] for i in range(len(positions))]
         
         for i, j, D, S in zip(i_list, j_list, D_list, S_list):
             self.neighbors_index[i].append(j)
             self.neighbors_shift[i].append(S)
-        
-        
         
         self.relative_positions = [[] for i in range(len(positions))]
         self.neighbor_species = [[] for i in range(len(positions))]
@@ -64,8 +56,7 @@ class Molecule():
             for k in range(len(self.neighbors_index[j])):
                 if (self.neighbors_index[j][k] == i) and is_same(self.neighbors_shift[j][k], -S):
                     self.neighbors_pos[i].append(k)
-                    
-              
+                             
     def get_max_num(self):
         maximum = None
         for chunk in self.relative_positions:
