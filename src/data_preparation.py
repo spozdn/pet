@@ -24,16 +24,23 @@ def update_pyg_graphs(pyg_graphs, key, values):
         pyg_graphs[index].update({key: values[index]})
 
 
-def get_pyg_graphs(structures, all_species, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES):
+def get_pyg_graphs(structures, all_species, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES, USE_LONG_RANGE, K_CUT):
     molecules = [
-        Molecule(structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+        Molecule(structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES, USE_LONG_RANGE, K_CUT)
         for structure in tqdm(structures)
     ]
 
     max_nums = [molecule.get_max_num() for molecule in molecules]
     max_num = np.max(max_nums)
+
+    if USE_LONG_RANGE:
+        k_nums = [molecule.get_num_k() for molecule in molecules]
+        max_k_num = np.max(k_nums)
+    else:
+        max_k_num = None
+        
     pyg_graphs = [
-        molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)
+        molecule.get_graph(max_num, all_species, max_k_num) for molecule in tqdm(molecules)
     ]
     return pyg_graphs
 

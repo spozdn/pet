@@ -63,7 +63,10 @@ def main():
 
     all_species = np.load(ALL_SPECIES_PATH)
 
-    graphs = get_pyg_graphs(structures, all_species, ARCHITECTURAL_HYPERS.R_CUT, ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+    graphs = get_pyg_graphs(structures, all_species, ARCHITECTURAL_HYPERS.R_CUT, 
+                            ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
+                            ARCHITECTURAL_HYPERS.USE_LONG_RANGE,
+                            ARCHITECTURAL_HYPERS.K_CUT)
 
     if FITTING_SCHEME.MULTI_GPU:
         loader = DataListLoader(graphs, batch_size=args.batch_size, shuffle=False)

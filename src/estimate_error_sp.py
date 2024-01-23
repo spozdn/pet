@@ -144,7 +144,8 @@ def main():
 
     structures = ase.io.read(STRUCTURES_PATH, index = ':')
 
-    molecules = [Molecule(structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA, USE_FORCES, hypers_main.FORCES_KEY) for structure in tqdm(structures)]
+    molecules = [Molecule(structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES_DATA, USE_FORCES,
+                           hypers_main.FORCES_KEY) for structure in tqdm(structures)]
     max_nums = [molecule.get_max_num() for molecule in molecules]
     max_num = np.max(max_nums)
     graphs = [molecule.get_graph(max_num, all_species) for molecule in tqdm(molecules)]

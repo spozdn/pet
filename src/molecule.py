@@ -3,10 +3,11 @@ import torch
 import ase.io
 import numpy as np
 from torch_geometric.data import Data
-
+from .long_range import get_reciprocal, get_all_k
 
 class Molecule():
-    def __init__(self, atoms, r_cut, use_additional_scalar_attributes):
+    def __init__(self, atoms, r_cut, use_additional_scalar_attributes, 
+                 use_long_range, k_cut):
         
         self.use_additional_scalar_attributes = use_additional_scalar_attributes
              
@@ -56,6 +57,15 @@ class Molecule():
             for k in range(len(self.neighbors_index[j])):
                 if (self.neighbors_index[j][k] == i) and is_same(self.neighbors_shift[j][k], -S):
                     self.neighbors_pos[i].append(k)
+
+        self.use_long_range = use_long_range
+        if self.use_long_range:
+            self.cell = np.array(self.atoms.cell)
+            w_1, w_2, w_3 = get_reciprocal(self.cell[0], self.cell[1], self.cell[2])
+            reciprocal = np.concatenate([w_1[np.newaxis], w_2[np.newaxis], w_3[np.newaxis]], axis = 0)
+            self.reciprocal = reciprocal
+            self.k_vectors = get_all_k(self.cell[0], self.cell[1], self.cell[2], k_cut)
+            self.k_cut = k_cut
                              
     def get_max_num(self):
         maximum = None
@@ -64,10 +74,15 @@ class Molecule():
                 maximum = len(chunk)
         return maximum
     
-    def get_graph(self, max_num, all_species):
+    def get_num_k(self):
+        if self.use_long_range:
+            return len(self.k_vectors)
+        else:
+            return None
+    
+    def get_graph(self, max_num, all_species, max_num_k):
         central_species = [np.where(all_species == specie)[0][0] for specie in self.central_species]
         central_species = torch.LongTensor(central_species)
-       
         
         nums = []
         mask = []
@@ -119,7 +134,15 @@ class Molecule():
         if self.use_additional_scalar_attributes:
             kwargs['neighbor_scalar_attributes'] = torch.FloatTensor(neighbor_scalar_attributes)
             kwargs['central_scalar_attributes'] = torch.FloatTensor(self.central_scalar_attributes)
-        
+
+        if self.use_long_range:
+            kwargs['cell'] = torch.FloatTensor(self.cell)[None]
+            kwargs['reciprocal'] = torch.FloatTensor(self.reciprocal)[None]
+            k_vectors = np.zeros([1, len(max_num_k), 3])
+            for index in range(len(self.k_vectors)):
+                k_vectors[0, index] = self.k_vectors[index]
+            kwargs['k_vectors'] = torch.FloatTensor(k_vectors)
+
         result = Data(**kwargs)
     
         return result

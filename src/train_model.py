@@ -67,8 +67,14 @@ def main():
     print(len(train_structures))
     print(len(val_structures))
 
-    train_graphs = get_pyg_graphs(train_structures, all_species, ARCHITECTURAL_HYPERS.R_CUT, ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
-    val_graphs = get_pyg_graphs(val_structures, all_species, ARCHITECTURAL_HYPERS.R_CUT, ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES)
+    train_graphs = get_pyg_graphs(train_structures, all_species, ARCHITECTURAL_HYPERS.R_CUT, 
+                                  ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
+                                  ARCHITECTURAL_HYPERS.USE_LONG_RANGE,
+                                  ARCHITECTURAL_HYPERS.K_CUT)
+    val_graphs = get_pyg_graphs(val_structures, all_species, ARCHITECTURAL_HYPERS.R_CUT,
+                                ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
+                                ARCHITECTURAL_HYPERS.USE_LONG_RANGE,
+                                ARCHITECTURAL_HYPERS.K_CUT)
 
     if MLIP_SETTINGS.USE_ENERGIES:
         self_contributions = get_self_contributions(MLIP_SETTINGS.ENERGY_KEY, train_structures, all_species)
