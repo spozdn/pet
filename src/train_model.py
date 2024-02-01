@@ -128,7 +128,12 @@ def main():
         forces_mae_model_keeper = ModelKeeper()
 
     if MLIP_SETTINGS.USE_ENERGIES:
-        sliding_energies_rmse = get_rmse(val_energies, np.mean(val_energies))
+        if FITTING_SCHEME.ENERGIES_LOSS == 'per_structure':
+            sliding_energies_rmse = get_rmse(val_energies, np.mean(val_energies))
+        else:
+            val_n_atoms = np.array([len(struc.positions) for struc in val_structures])
+            val_energies_per_atom = val_energies / val_n_atoms
+            sliding_energies_rmse = get_rmse(val_energies_per_atom, np.mean(val_energies_per_atom))
 
         energies_rmse_model_keeper = ModelKeeper()
         energies_mae_model_keeper = ModelKeeper()
@@ -147,9 +152,15 @@ def main():
                 batch.to(device)
 
             predictions_energies, predictions_forces = model(batch, augmentation = True, create_graph = True)
+            if FITTING_SCHEME.ENERGIES_LOSS == 'per_atom':
+                predictions_energies = predictions_energies / batch.n_atoms
+                ground_truth_energies = batch.y / batch.n_atoms
+            else:
+                ground_truth_energies = batch.y
+
             if MLIP_SETTINGS.USE_ENERGIES:
-                energies_logger.train_logger.update(predictions_energies, batch.y)
-                loss_energies = get_loss(predictions_energies, batch.y, FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS)
+                energies_logger.train_logger.update(predictions_energies, ground_truth_energies)
+                loss_energies = get_loss(predictions_energies, ground_truth_energies, FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS)
             if MLIP_SETTINGS.USE_FORCES:
                 forces_logger.train_logger.update(predictions_forces, batch.forces)
                 loss_forces = get_loss(predictions_forces, batch.forces, FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS)
@@ -175,14 +186,28 @@ def main():
                 batch.to(device)
 
             predictions_energies, predictions_forces = model(batch, augmentation = False, create_graph = False)
+            
+            if FITTING_SCHEME.ENERGIES_LOSS == 'per_atom':
+                predictions_energies = predictions_energies / batch.n_atoms
+                ground_truth_energies = batch.y / batch.n_atoms
+            else:
+                ground_truth_energies = batch.y
+            
             if MLIP_SETTINGS.USE_ENERGIES:
-                energies_logger.val_logger.update(predictions_energies, batch.y)
+                energies_logger.val_logger.update(predictions_energies, ground_truth_energies)
             if MLIP_SETTINGS.USE_FORCES:
                 forces_logger.val_logger.update(predictions_forces, batch.forces)
 
         now = {}
+        
+        if FITTING_SCHEME.ENERGIES_LOSS == 'per_structure':
+            energies_key = 'energies per structure'
+        else:
+            energies_key = 'energies per atom'
+
         if MLIP_SETTINGS.USE_ENERGIES:
-            now['energies'] = energies_logger.flush()
+            now[energies_key] = energies_logger.flush()
+            
         if MLIP_SETTINGS.USE_FORCES:
             now['forces'] = forces_logger.flush()   
         now['lr'] = scheduler.get_last_lr()
@@ -190,10 +215,10 @@ def main():
         now['elapsed_time'] = time.time() - TIME_SCRIPT_STARTED
 
         if MLIP_SETTINGS.USE_ENERGIES:
-            sliding_energies_rmse = FITTING_SCHEME.SLIDING_FACTOR * sliding_energies_rmse + (1.0 - FITTING_SCHEME.SLIDING_FACTOR) * now['energies']['val']['rmse']
+            sliding_energies_rmse = FITTING_SCHEME.SLIDING_FACTOR * sliding_energies_rmse + (1.0 - FITTING_SCHEME.SLIDING_FACTOR) * now[energies_key]['val']['rmse']
 
-            energies_mae_model_keeper.update(model, now['energies']['val']['mae'], epoch)
-            energies_rmse_model_keeper.update(model, now['energies']['val']['rmse'], epoch)
+            energies_mae_model_keeper.update(model, now[energies_key]['val']['mae'], epoch)
+            energies_rmse_model_keeper.update(model, now[energies_key]['val']['rmse'], epoch)
 
 
         if MLIP_SETTINGS.USE_FORCES:
@@ -202,19 +227,23 @@ def main():
             forces_rmse_model_keeper.update(model, now['forces']['val']['rmse'], epoch)    
 
         if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES:
-            multiplication_mae_model_keeper.update(model, now['forces']['val']['mae'] * now['energies']['val']['mae'], epoch,
-                                                   additional_info = [now['energies']['val']['mae'], now['forces']['val']['mae']])
-            multiplication_rmse_model_keeper.update(model, now['forces']['val']['rmse'] * now['energies']['val']['rmse'], epoch,
-                                                    additional_info = [now['energies']['val']['rmse'], now['forces']['val']['rmse']])
+            multiplication_mae_model_keeper.update(model, now['forces']['val']['mae'] * now[energies_key]['val']['mae'], epoch,
+                                                   additional_info = [now[energies_key]['val']['mae'], now['forces']['val']['mae']])
+            multiplication_rmse_model_keeper.update(model, now['forces']['val']['rmse'] * now[energies_key]['val']['rmse'], epoch,
+                                                    additional_info = [now[energies_key]['val']['rmse'], now['forces']['val']['rmse']])
 
 
-        val_mae_message = "val mae/rmse:"
-        train_mae_message = "train mae/rmse:"
+        val_mae_message = "val mae/rmse "
+        train_mae_message = "train mae/rmse "
 
         if MLIP_SETTINGS.USE_ENERGIES:
-            val_mae_message += f" {now['energies']['val']['mae']}/{now['energies']['val']['rmse']};"
-            train_mae_message += f" {now['energies']['train']['mae']}/{now['energies']['train']['rmse']};"
+            val_mae_message += energies_key + ': '
+            train_mae_message += energies_key + ': '
+            val_mae_message += f" {now[energies_key]['val']['mae']}/{now[energies_key]['val']['rmse']};"
+            train_mae_message += f" {now[energies_key]['train']['mae']}/{now[energies_key]['train']['rmse']};"
         if MLIP_SETTINGS.USE_FORCES:
+            val_mae_message += 'forces per component: '
+            train_mae_message += 'forces per component: '
             val_mae_message += f" {now['forces']['val']['mae']}/{now['forces']['val']['rmse']}"
             train_mae_message += f" {now['forces']['train']['mae']}/{now['forces']['train']['rmse']}"
 

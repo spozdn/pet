@@ -54,7 +54,8 @@ def prepare_model():
                                          "hypers_minimal_preln.yaml",
                                          "hypers_minimal_only_forces.yaml",
                                          "hypers_minimal_only_energies.yaml",
-                                         "hypers_minimal_gradient_clipping.yaml"])
+                                         "hypers_minimal_gradient_clipping.yaml",
+                                         "hypers_minimal_loss_per_atom.yaml"])
 def test_pet_train(hypers_path):
     """
     Test the 'pet_train' script for successful execution.

@@ -129,7 +129,8 @@ class Molecule():
                   'neighbors_pos' : neighbors_pos,
                   'neighbors_index' : neighbors_index.transpose(0, 1),
                   'nums' : nums,
-                  'mask' : mask}
+                  'mask' : mask,
+                  'n_atoms' : len(self.atoms.positions)}
         
         if self.use_additional_scalar_attributes:
             kwargs['neighbor_scalar_attributes'] = torch.FloatTensor(neighbor_scalar_attributes)
