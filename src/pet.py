@@ -3,11 +3,11 @@ import torch
 import numpy as np
 import torch_geometric
 from torch import nn
-
+from typing import Dict, Optional
 
 from .transformer import TransformerLayer, Transformer
 from .molecule import batch_to_dict
-from .utilities import get_rotations
+from .utilities import get_rotations, NeverRun
 
 class CentralSplitter(torch.nn.Module):
     def __init__(self): 
@@ -59,7 +59,7 @@ class CentralUniter(torch.nn.Module):
             
         return result
 
-def cutoff_func(grid, r_cut, delta):
+def cutoff_func(grid : torch.Tensor, r_cut : float, delta : float):
     mask_bigger = grid >= r_cut
     mask_smaller = grid <= r_cut - delta
     grid = (grid - r_cut + delta) / delta
@@ -128,10 +128,16 @@ class CartesianTransformer(torch.nn.Module):
         if self.compress is None:
             raise ValueError("unknown compress mode")
         
+        self.neighbor_embedder = NeverRun() # for torchscript
         if hypers.BLEND_NEIGHBOR_SPECIES and (not is_first):
             self.neighbor_embedder = nn.Embedding(n_atomic_species + 1, d_model)
             
         self.add_central_token = add_central_token
+
+        self.central_embedder = NeverRun() # for torchscript
+        self.central_scalar_embedding = NeverRun() # for torchscript
+        self.central_compress = NeverRun() # for torchscript
+
         if add_central_token:
             self.central_embedder = nn.Embedding(n_atomic_species + 1, d_model)
             if hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
@@ -149,41 +155,58 @@ class CartesianTransformer(torch.nn.Module):
                         get_activation(hypers),
                         nn.Linear(d_model, d_model))
                     
-        
-    def forward(self, batch_dict):
+        # assign hypers one by one for torch.script
+        self.USE_LENGTH = hypers.USE_LENGTH
+        self.BLEND_NEIGHBOR_SPECIES = hypers.BLEND_NEIGHBOR_SPECIES
+        self.USE_ADDITIONAL_SCALAR_ATTRIBUTES = hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES
+        self.USE_ONLY_LENGTH = hypers.USE_ONLY_LENGTH            
+        self.R_CUT = hypers.R_CUT
+        self.CUTOFF_DELTA = hypers.CUTOFF_DELTA
+                    
+    def forward(self, batch_dict : Dict[str, torch.Tensor]):
         
         x = batch_dict["x"]
-        if self.hypers.USE_LENGTH:
+
+        if self.USE_LENGTH:
             neighbor_lengths = torch.sqrt(torch.sum(x ** 2, dim = 2) + 1e-15)[:, :, None]
+        else:
+            neighbor_lengths = torch.FloatTensor()  # for torch script
+
         central_species = batch_dict['central_species']
         neighbor_species = batch_dict['neighbor_species']
         input_messages = batch_dict['input_messages']
         mask = batch_dict['mask']
         batch = batch_dict['batch']
         nums = batch_dict['nums']
-        if self.hypers.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
+
+        if self.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
             neighbor_embedding = self.neighbor_embedder(neighbor_species)
+        else:
+            neighbor_embedding = torch.FloatTensor()  # for torch script
             
-        if self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if self.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             neighbor_scalar_attributes = batch_dict['neighbor_scalar_attributes']
             central_scalar_attributes = batch_dict['central_scalar_attributes']
+        else:
+            neighbor_scalar_attributes = torch.FloatTensor()  # for torch script
+            central_scalar_attributes = torch.FloatTensor()  # for torch script
         
         initial_n_tokens = x.shape[1]
         max_number = int(torch.max(nums))
         
-        if self.hypers.USE_ONLY_LENGTH:
+        if self.USE_ONLY_LENGTH:
             coordinates = [neighbor_lengths]
         else:
             coordinates = [x]
-            if self.hypers.USE_LENGTH:
+            if self.USE_LENGTH:
                 coordinates.append(neighbor_lengths)
                 
-        if self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if self.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             coordinates.append(neighbor_scalar_attributes)
         coordinates = torch.cat(coordinates, dim = 2)
         coordinates = self.r_embedding(coordinates)   
         
-        if self.hypers.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
+        if self.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
             tokens = torch.cat([coordinates, neighbor_embedding, input_messages], dim = 2)
         else:
             tokens = torch.cat([coordinates, input_messages], dim = 2) 
@@ -191,9 +214,8 @@ class CartesianTransformer(torch.nn.Module):
         tokens = self.compress(tokens)
         
         if self.add_central_token:           
-            
             central_specie_embedding = self.central_embedder(central_species)
-            if self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+            if self.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
                 central_scalar_embedding = self.central_scalar_embedding(central_scalar_attributes)
                 central_token = torch.cat([central_specie_embedding, central_scalar_embedding], dim = 1)
                 central_token = self.central_compress(central_token)
@@ -202,11 +224,11 @@ class CartesianTransformer(torch.nn.Module):
                 
             tokens = torch.cat([central_token[:, None, :], tokens], dim = 1)
 
-            submask = torch.zeros(mask.shape[0], dtype = bool).to(mask.device)
+            submask = torch.zeros(mask.shape[0], dtype = torch.bool).to(mask.device)
             total_mask = torch.cat([submask[:, None], mask], dim = 1)
             
             lengths = torch.sqrt(torch.sum(x * x, dim = 2) + 1e-16)
-            multipliers = cutoff_func(lengths, self.hypers.R_CUT, self.hypers.CUTOFF_DELTA)   
+            multipliers = cutoff_func(lengths, self.R_CUT, self.CUTOFF_DELTA)   
             sub_multipliers = torch.ones(mask.shape[0], device = mask.device)
             multipliers = torch.cat([sub_multipliers[:, None], multipliers], dim = 1)
             multipliers[total_mask] = 0.0
@@ -228,7 +250,7 @@ class CartesianTransformer(torch.nn.Module):
             lengths = torch.sqrt(torch.sum(x * x, dim = 2) + 1e-16)
             
             
-            multipliers = cutoff_func(lengths, self.hypers.R_CUT, self.hypers.CUTOFF_DELTA)           
+            multipliers = cutoff_func(lengths, self.R_CUT, self.CUTOFF_DELTA)           
             multipliers[mask] = 0.0
             
             multipliers = multipliers[:, None, :]
@@ -273,14 +295,60 @@ class Head(torch.nn.Module):
                                     nn.Linear(n_neurons, n_neurons), get_activation(hypers),
                                     nn.Linear(n_neurons, hypers.D_OUTPUT))
        
-    def forward(self, batch_dict):
+    def forward(self, batch_dict : Dict[str, torch.Tensor]):
         pooled = batch_dict['pooled']
         outputs = self.nn(pooled)
         return {"atomic_predictions" : outputs}
+
+class CentralTokensPredictor(torch.nn.Module):
+    def __init__(self, hypers, head):
+        super(CentralTokensPredictor, self).__init__()  
+        self.head = head
+        self.hypers = hypers
+
+    def forward(self, central_tokens: torch.Tensor, central_species : torch.Tensor):
+        predictions = self.head({'pooled' : central_tokens, 
+                                     'central_species' : central_species})['atomic_predictions']
+        return predictions
     
+class MessagesPredictor(torch.nn.Module):
+    def __init__(self, hypers, head):
+        super(MessagesPredictor, self).__init__()
+        self.head = head
+        self.AVERAGE_POOLING = hypers.AVERAGE_POOLING
+
+    def forward(self, messages: torch.Tensor, mask: torch.Tensor, nums: torch.Tensor,
+                 central_species: torch.Tensor, multipliers : torch.Tensor):
+        messages_proceed = messages * multipliers[:, :, None]
+        messages_proceed[mask] = 0.0
+        if self.AVERAGE_POOLING:
+            pooled = messages_proceed.sum(dim = 1) / nums[:, None]
+        else:
+            pooled = messages_proceed.sum(dim = 1)
+
+        predictions = self.head({'pooled' : pooled, 
+                                     'central_species' : central_species})['atomic_predictions']
+        return predictions
+
+class MessagesBondsPredictor(torch.nn.Module):
+    def __init__(self, hypers, head):
+        super(MessagesBondsPredictor, self).__init__()
+        self.head = head
+        self.AVERAGE_BOND_ENERGIES = hypers.AVERAGE_BOND_ENERGIES
+
+    def forward(self, messages: torch.Tensor, mask: torch.Tensor, nums: torch.Tensor,
+                 central_species: torch.Tensor):
+        predictions = self.head({'pooled' : messages, 
+                                     'central_species' : central_species})['atomic_predictions']
+        predictions[mask] = 0.0
+        if self.AVERAGE_BOND_ENERGIES:
+            result = predictions.sum(dim = 1) / nums
+        else:
+            result = predictions.sum(dim = 1)
+        return result
+       
 class PET(torch.nn.Module):
-    def __init__(self, hypers, transformer_dropout, n_atomic_species, 
-                  global_aug):
+    def __init__(self, hypers, transformer_dropout, n_atomic_species):
         super(PET, self).__init__()
         self.hypers = hypers
         transformer_d_model = hypers.TRANSFORMER_D_MODEL
@@ -299,7 +367,6 @@ class PET(torch.nn.Module):
 
 
         self.embedding = nn.Embedding(n_atomic_species + 1, transformer_d_model)
-        self.global_aug = global_aug
         gnn_layers = []
         if transformers_central_specific:
             for layer_index in range(n_gnn_layers):
@@ -342,7 +409,8 @@ class PET(torch.nn.Module):
                 heads.append(Head(hypers, transformer_d_model, head_n_neurons))
         
         self.heads = torch.nn.ModuleList(heads)
-        
+        self.central_tokens_predictors = torch.nn.ModuleList([CentralTokensPredictor(hypers, head) for head in heads])
+        self.messages_predictors = torch.nn.ModuleList([MessagesPredictor(hypers, head) for head in heads])
         
         if hypers.USE_BOND_ENERGIES:
             bond_heads = []
@@ -359,38 +427,18 @@ class PET(torch.nn.Module):
                     bond_heads.append(Head(hypers, transformer_d_model, head_n_neurons))
 
             self.bond_heads = torch.nn.ModuleList(bond_heads)
-      
-    def get_predictions_messages(self, messages, mask, nums, head, central_species, multipliers):
-        #print(multipliers[0, :])
-        messages_proceed = messages * multipliers[:, :, None]
-        messages_proceed[mask] = 0.0
-        if self.hypers.AVERAGE_POOLING:
-            pooled = messages_proceed.sum(dim = 1) / nums[:, None]
+            self.messages_bonds_predictors = torch.nn.ModuleList([MessagesBondsPredictor(hypers, head) for head in bond_heads])
         else:
-            pooled = messages_proceed.sum(dim = 1)
+            self.messages_bonds_predictors = torch.nn.ModuleList([NeverRun() for _ in range(n_gnn_layers)])
         
-        predictions = head({'pooled' : pooled, 
-                                     'central_species' : central_species})['atomic_predictions']
-        return predictions
-    
-    def get_predictions_messages_bonds(self, messages, mask, nums, head, central_species):
-        predictions = head({'pooled' : messages, 
-                                     'central_species' : central_species})['atomic_predictions']
-        predictions[mask] = 0.0
-        if self.hypers.AVERAGE_BOND_ENERGIES:
-            result = predictions.sum(dim = 1) / nums
-        else:
-            result = predictions.sum(dim = 1)
-        return result
-    
-    def get_predictions_central_tokens(self, central_tokens, head, central_species):
-        predictions = head({'pooled' : central_tokens, 
-                                     'central_species' : central_species})['atomic_predictions']
-        return predictions
-        
-    def get_predictions(self, batch):
-        batch_dict = batch_to_dict(batch)
-        
+        self.R_CUT = hypers.R_CUT
+        self.CUTOFF_DELTA = hypers.CUTOFF_DELTA
+        self.USE_BOND_ENERGIES = hypers.USE_BOND_ENERGIES
+        self.TARGET_TYPE = hypers.TARGET_TYPE
+        self.TARGET_AGGREGATION = hypers.TARGET_AGGREGATION
+        self.N_GNN_LAYERS = hypers.N_GNN_LAYERS
+
+    def get_predictions(self, batch_dict : Dict[str, torch.Tensor]):
         
         x = batch_dict["x"]
         central_species = batch_dict['central_species']
@@ -400,21 +448,16 @@ class PET(torch.nn.Module):
         nums = batch_dict['nums']
         
         lengths = torch.sqrt(torch.sum(x * x, dim = 2) + 1e-16)
-        multipliers = cutoff_func(lengths, self.hypers.R_CUT, self.hypers.CUTOFF_DELTA) 
+        multipliers = cutoff_func(lengths, self.R_CUT, self.CUTOFF_DELTA) 
         
         neighbors_index = batch_dict['neighbors_index']
         neighbors_pos = batch_dict['neighbors_pos']
         
         batch_dict['input_messages'] = self.embedding(neighbor_species)
-        atomic_predictions = 0.0
+        atomic_predictions = torch.FloatTensor([0]).to(x.device)
         
-        for layer_index in range(len(self.gnn_layers)):
-            head = self.heads[layer_index]
-            gnn_layer = self.gnn_layers[layer_index]
+        for layer_index, (central_tokens_predictor, messages_predictor, gnn_layer, messages_bonds_predictor) in enumerate(zip(self.central_tokens_predictors, self.messages_predictors, self.gnn_layers, self.messages_bonds_predictors)):
             
-            if self.hypers.USE_BOND_ENERGIES:
-                bond_head = self.bond_heads[layer_index]
-                
             result = gnn_layer(batch_dict)
             output_messages = result["output_messages"]
            
@@ -423,39 +466,51 @@ class PET(torch.nn.Module):
             batch_dict['input_messages'] = 0.5 * (batch_dict['input_messages'] + new_input_messages)
             
             if "central_token" in result.keys():
-                atomic_predictions = atomic_predictions + self.get_predictions_central_tokens(result["central_token"],
-                                                                                       head, central_species)
+                atomic_predictions = atomic_predictions + central_tokens_predictor(result["central_token"], central_species)
             else:
-                 atomic_predictions = atomic_predictions + self.get_predictions_messages(output_messages, mask, nums, head, central_species, multipliers)
+                atomic_predictions = atomic_predictions + messages_predictor(output_messages, mask, nums, central_species, multipliers)
                     
-            if self.hypers.USE_BOND_ENERGIES:
-                atomic_predictions = atomic_predictions + self.get_predictions_messages_bonds(output_messages,
-                                                                                    mask, nums, bond_head, central_species)
+            if self.USE_BOND_ENERGIES:
+                atomic_predictions = atomic_predictions + messages_bonds_predictor(output_messages, mask, nums, central_species)
        
-        if self.hypers.TARGET_TYPE == 'structural':
-            if self.hypers.TARGET_AGGREGATION == 'sum':
+        if self.TARGET_TYPE == 'structural':
+            if self.TARGET_AGGREGATION == 'sum':
                 return torch_geometric.nn.global_add_pool(atomic_predictions,
                                                   batch=batch_dict['batch'])
-            if self.hypers.TARGET_AGGREGATION == 'mean':
+            if self.TARGET_AGGREGATION == 'mean':
                 return torch_geometric.nn.global_mean_pool(atomic_predictions,
                                                   batch=batch_dict['batch'])
             raise ValueError("unknown target aggregation")
-        if self.hypers.TARGET_TYPE == 'atomic':
+        if self.TARGET_TYPE == 'atomic':
             return atomic_predictions
         raise ValueError("unknown target type")
     
-    def forward(self, batch, augmentation):
-        if augmentation:
-            indices = batch.batch.cpu().data.numpy()
-            rotations = torch.FloatTensor(get_rotations(indices, global_aug = self.global_aug)).to(batch.x.device)
-            x_initial = batch.x
-            batch.x = torch.bmm(x_initial, rotations)
-            predictions = self.get_predictions(batch)
-            batch.x = x_initial
+    def forward(self, batch_dict: Dict[str, torch.Tensor], rotations: Optional[torch.Tensor] = None):
+        if rotations is not None:
+            x_initial = batch_dict['x']
+            batch_dict['x'] = torch.bmm(x_initial, rotations)
+            predictions = self.get_predictions(batch_dict)
+            batch_dict['x'] = x_initial
             return predictions
         else:
-            return self.get_predictions(batch)
-    
+            return self.get_predictions(batch_dict)
+        
+class PETUtilityWrapper(torch.nn.Module):
+    '''Uncoupling torch.unscriptable logic from the main PET class'''
+    def __init__(self, pet_model, 
+                  global_aug):
+        super(PETUtilityWrapper, self).__init__()
+        self.pet_model = pet_model
+        self.global_aug = global_aug
+
+    def forward(self, batch, augmentation):
+        batch_dict = batch_to_dict(batch)
+        rotations = None
+        if augmentation is not None:
+            indices = batch.batch.cpu().data.numpy()
+            rotations = torch.FloatTensor(get_rotations(indices,
+                                                         global_aug = self.global_aug)).to(batch.x.device)
+        return self.pet_model(batch_dict, rotations)
 
 class PETMLIPWrapper(torch.nn.Module):
     def __init__(self, model, use_energies, use_forces):
@@ -463,11 +518,11 @@ class PETMLIPWrapper(torch.nn.Module):
         self.model = model
         self.use_energies = use_energies
         self.use_forces = use_forces
-        if self.model.hypers.D_OUTPUT != 1:
+        if self.model.pet_model.hypers.D_OUTPUT != 1:
             raise ValueError("D_OUTPUT should be 1 for MLIP; energy is a single scalar")
-        if self.model.hypers.TARGET_TYPE != 'structural':
+        if self.model.pet_model.hypers.TARGET_TYPE != 'structural':
             raise ValueError("TARGET_TYPE should be structural for MLIP")
-        if self.model.hypers.TARGET_AGGREGATION != 'sum':
+        if self.model.pet_model.hypers.TARGET_AGGREGATION != 'sum':
             raise ValueError("TARGET_AGGREGATION should be sum for MLIP")
     
     def get_predictions(self, batch, augmentation):

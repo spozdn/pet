@@ -10,7 +10,7 @@ from torch_geometric.nn import DataParallel
 
 from .molecule import Molecule
 from .hypers import Hypers
-from .pet import PET
+from .pet import PET, PETUtilityWrapper
 from .data_preparation import get_rmse, get_mae
 
 
@@ -72,7 +72,7 @@ def main():
                            0.0, len(all_species), 
                            hypers.N_GNN_LAYERS, hypers.HEAD_N_NEURONS, hypers.TRANSFORMERS_CENTRAL_SPECIFIC, hypers.HEADS_CENTRAL_SPECIFIC, 
                            add_tokens).cuda()
-
+        model = PETUtilityWrapper(model)
 
         if hypers.MULTI_GPU:
             model = DataParallel(model)

@@ -11,7 +11,7 @@ import pickle
 from torch_geometric.nn import DataParallel
 
 from .hypers import save_hypers, set_hypers_from_files
-from .pet import PET
+from .pet import PET, PETUtilityWrapper
 from .utilities import FullLogger, get_scheduler, load_checkpoint, get_data_loaders
 from .utilities import get_loss, set_reproducibility, get_calc_names
 from .utilities import get_optimizer
@@ -80,9 +80,10 @@ def main():
 
     train_loader, val_loader = get_data_loaders(train_graphs, val_graphs, FITTING_SCHEME)
 
-    model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species),
-                FITTING_SCHEME.GLOBAL_AUG).to(device)
-   
+    model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species)).to(device)
+    model = PETUtilityWrapper(model,
+                FITTING_SCHEME.GLOBAL_AUG)
+
     if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
         model = DataParallel(model)
         model = model.to(torch.device('cuda:0'))

@@ -10,7 +10,7 @@ from torch_geometric.nn import DataParallel
 import argparse
 
 from .hypers import load_hypers_from_file
-from .pet import PET, PETMLIPWrapper
+from .pet import PET, PETMLIPWrapper, PETUtilityWrapper
 from .utilities import get_rmse, get_mae, set_reproducibility, Accumulator, report_accuracy
 from .data_preparation import get_pyg_graphs, get_compositional_features
 from .data_preparation import get_targets
@@ -73,9 +73,10 @@ def main():
     else:        
         loader = DataLoader(graphs, batch_size=args.batch_size, shuffle=False)
 
-    model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species),
-                FITTING_SCHEME.GLOBAL_AUG).to(device)
-
+    model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species)).to(device)
+    model = PETUtilityWrapper(model,
+                FITTING_SCHEME.GLOBAL_AUG)
+    
     if hypers.UTILITY_FLAGS.CALCULATION_TYPE == 'mlip':
         model = PETMLIPWrapper(model, hypers.MLIP_SETTINGS.USE_ENERGIES,
                             hypers.MLIP_SETTINGS.USE_FORCES)
