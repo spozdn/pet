@@ -6,7 +6,7 @@ from torch_geometric.nn import DataParallel
 from .data_preparation import get_compositional_features
 from .molecule import Molecule
 from .hypers import load_hypers_from_file
-from .pet import PET, PETMLIPWrapper
+from .pet import PET, PETMLIPWrapper, PETUtilityWrapper
 
 
 class SingleStructCalculator():
@@ -28,9 +28,10 @@ class SingleStructCalculator():
         if MLIP_SETTINGS.USE_ENERGIES:
             self.self_contributions = np.load(self_contributions_path)
             
-        model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species),
-                FITTING_SCHEME.GLOBAL_AUG).to(device)
-        
+        model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species)).to(device)
+        model = PETUtilityWrapper(model,
+                FITTING_SCHEME.GLOBAL_AUG)
+
         model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
         if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
             model = DataParallel(model)
@@ -50,7 +51,7 @@ class SingleStructCalculator():
                             self.architectural_hypers.USE_LONG_RANGE, self.architectural_hypers.K_CUT)
         
         graph = molecule.get_graph(molecule.get_max_num(), self.all_species, molecule.get_num_k())
-       
+        graph.batch = torch.zeros(graph.num_nodes, dtype = torch.long, device = graph.x.device)
         prediction_energy, prediction_forces = self.model(graph, augmentation = False, create_graph = False)
 
         compositional_features = get_compositional_features([structure], self.all_species)[0]
