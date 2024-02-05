@@ -3,11 +3,11 @@ import torch
 import numpy as np
 import torch_geometric
 from torch import nn
-
+from typing import Dict
 
 from .transformer import TransformerLayer, Transformer
 from .molecule import batch_to_dict
-from .utilities import get_rotations
+from .utilities import get_rotations, NeverRun
 
 class CentralSplitter(torch.nn.Module):
     def __init__(self): 
@@ -59,7 +59,7 @@ class CentralUniter(torch.nn.Module):
             
         return result
 
-def cutoff_func(grid, r_cut, delta):
+def cutoff_func(grid : torch.Tensor, r_cut : float, delta : float):
     mask_bigger = grid >= r_cut
     mask_smaller = grid <= r_cut - delta
     grid = (grid - r_cut + delta) / delta
@@ -128,10 +128,16 @@ class CartesianTransformer(torch.nn.Module):
         if self.compress is None:
             raise ValueError("unknown compress mode")
         
+        self.neighbor_embedder = NeverRun() # for torchscript
         if hypers.BLEND_NEIGHBOR_SPECIES and (not is_first):
             self.neighbor_embedder = nn.Embedding(n_atomic_species + 1, d_model)
             
         self.add_central_token = add_central_token
+
+        self.central_embedder = NeverRun() # for torchscript
+        self.central_scalar_embedding = NeverRun() # for torchscript
+        self.central_compress = NeverRun() # for torchscript
+
         if add_central_token:
             self.central_embedder = nn.Embedding(n_atomic_species + 1, d_model)
             if hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
@@ -149,41 +155,58 @@ class CartesianTransformer(torch.nn.Module):
                         get_activation(hypers),
                         nn.Linear(d_model, d_model))
                     
-        
+        # assign hypers one by one for torch.script
+        self.USE_LENGTH = hypers.USE_LENGTH
+        self.BLEND_NEIGHBOR_SPECIES = hypers.BLEND_NEIGHBOR_SPECIES
+        self.USE_ADDITIONAL_SCALAR_ATTRIBUTES = hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES
+        self.USE_ONLY_LENGTH = hypers.USE_ONLY_LENGTH            
+        self.R_CUT = hypers.R_CUT
+        self.CUTOFF_DELTA = hypers.CUTOFF_DELTA
+                    
     def forward(self, batch_dict):
         
         x = batch_dict["x"]
-        if self.hypers.USE_LENGTH:
+
+        if self.USE_LENGTH:
             neighbor_lengths = torch.sqrt(torch.sum(x ** 2, dim = 2) + 1e-15)[:, :, None]
+        else:
+            neighbor_lengths = torch.Tensor()  # for torch script
+
         central_species = batch_dict['central_species']
         neighbor_species = batch_dict['neighbor_species']
         input_messages = batch_dict['input_messages']
         mask = batch_dict['mask']
         batch = batch_dict['batch']
         nums = batch_dict['nums']
-        if self.hypers.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
+
+        if self.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
             neighbor_embedding = self.neighbor_embedder(neighbor_species)
+        else:
+            neighbor_embedding = torch.Tensor()  # for torch script
             
-        if self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if self.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             neighbor_scalar_attributes = batch_dict['neighbor_scalar_attributes']
             central_scalar_attributes = batch_dict['central_scalar_attributes']
+        else:
+            neighbor_scalar_attributes = torch.Tensor()  # for torch script
+            central_scalar_attributes = torch.Tensor()  # for torch script
         
         initial_n_tokens = x.shape[1]
         max_number = int(torch.max(nums))
         
-        if self.hypers.USE_ONLY_LENGTH:
+        if self.USE_ONLY_LENGTH:
             coordinates = [neighbor_lengths]
         else:
             coordinates = [x]
-            if self.hypers.USE_LENGTH:
+            if self.USE_LENGTH:
                 coordinates.append(neighbor_lengths)
                 
-        if self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+        if self.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             coordinates.append(neighbor_scalar_attributes)
         coordinates = torch.cat(coordinates, dim = 2)
         coordinates = self.r_embedding(coordinates)   
         
-        if self.hypers.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
+        if self.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
             tokens = torch.cat([coordinates, neighbor_embedding, input_messages], dim = 2)
         else:
             tokens = torch.cat([coordinates, input_messages], dim = 2) 
@@ -191,9 +214,8 @@ class CartesianTransformer(torch.nn.Module):
         tokens = self.compress(tokens)
         
         if self.add_central_token:           
-            
             central_specie_embedding = self.central_embedder(central_species)
-            if self.hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
+            if self.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
                 central_scalar_embedding = self.central_scalar_embedding(central_scalar_attributes)
                 central_token = torch.cat([central_specie_embedding, central_scalar_embedding], dim = 1)
                 central_token = self.central_compress(central_token)
@@ -202,11 +224,11 @@ class CartesianTransformer(torch.nn.Module):
                 
             tokens = torch.cat([central_token[:, None, :], tokens], dim = 1)
 
-            submask = torch.zeros(mask.shape[0], dtype = bool).to(mask.device)
+            submask = torch.zeros(mask.shape[0], dtype = torch.bool).to(mask.device)
             total_mask = torch.cat([submask[:, None], mask], dim = 1)
             
             lengths = torch.sqrt(torch.sum(x * x, dim = 2) + 1e-16)
-            multipliers = cutoff_func(lengths, self.hypers.R_CUT, self.hypers.CUTOFF_DELTA)   
+            multipliers = cutoff_func(lengths, self.R_CUT, self.CUTOFF_DELTA)   
             sub_multipliers = torch.ones(mask.shape[0], device = mask.device)
             multipliers = torch.cat([sub_multipliers[:, None], multipliers], dim = 1)
             multipliers[total_mask] = 0.0
@@ -228,7 +250,7 @@ class CartesianTransformer(torch.nn.Module):
             lengths = torch.sqrt(torch.sum(x * x, dim = 2) + 1e-16)
             
             
-            multipliers = cutoff_func(lengths, self.hypers.R_CUT, self.hypers.CUTOFF_DELTA)           
+            multipliers = cutoff_func(lengths, self.R_CUT, self.CUTOFF_DELTA)           
             multipliers[mask] = 0.0
             
             multipliers = multipliers[:, None, :]

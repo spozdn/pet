@@ -301,6 +301,14 @@ def report_accuracy(all_predictions, ground_truth, target_name,
             predictions_std_per_atom = get_rotational_discrepancy(all_predictions_per_atom)
             if verbose:
                 print(f"{target_name} rotational discrepancy std per atom {specification}: {predictions_std_per_atom} ")
-            
 
 
+class NeverRun(torch.nn.Module):
+    '''Dummy torch module to make torchscript happy.
+    This model should never be run'''
+
+    def __init__(self):
+        super(NeverRun, self).__init__()
+
+    def forward(self, *args, **kwargs):
+        raise RuntimeError("This model should never be run")
