@@ -163,14 +163,14 @@ class CartesianTransformer(torch.nn.Module):
         self.R_CUT = hypers.R_CUT
         self.CUTOFF_DELTA = hypers.CUTOFF_DELTA
                     
-    def forward(self, batch_dict):
+    def forward(self, batch_dict : Dict[str, torch.Tensor]):
         
         x = batch_dict["x"]
 
         if self.USE_LENGTH:
             neighbor_lengths = torch.sqrt(torch.sum(x ** 2, dim = 2) + 1e-15)[:, :, None]
         else:
-            neighbor_lengths = torch.Tensor()  # for torch script
+            neighbor_lengths = torch.FloatTensor()  # for torch script
 
         central_species = batch_dict['central_species']
         neighbor_species = batch_dict['neighbor_species']
@@ -182,14 +182,14 @@ class CartesianTransformer(torch.nn.Module):
         if self.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
             neighbor_embedding = self.neighbor_embedder(neighbor_species)
         else:
-            neighbor_embedding = torch.Tensor()  # for torch script
+            neighbor_embedding = torch.FloatTensor()  # for torch script
             
         if self.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             neighbor_scalar_attributes = batch_dict['neighbor_scalar_attributes']
             central_scalar_attributes = batch_dict['central_scalar_attributes']
         else:
-            neighbor_scalar_attributes = torch.Tensor()  # for torch script
-            central_scalar_attributes = torch.Tensor()  # for torch script
+            neighbor_scalar_attributes = torch.FloatTensor()  # for torch script
+            central_scalar_attributes = torch.FloatTensor()  # for torch script
         
         initial_n_tokens = x.shape[1]
         max_number = int(torch.max(nums))

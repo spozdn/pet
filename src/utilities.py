@@ -310,5 +310,5 @@ class NeverRun(torch.nn.Module):
     def __init__(self):
         super(NeverRun, self).__init__()
 
-    def forward(self, *args, **kwargs):
+    def forward(self, x) -> torch.Tensor:
         raise RuntimeError("This model should never be run")

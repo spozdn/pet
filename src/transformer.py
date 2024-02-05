@@ -85,13 +85,13 @@ class Transformer(torch.nn.Module):
         super(Transformer, self).__init__()
         self.transformer_type = trans_layer.transformer_type
 
-        self.final_norm = NeverRun() # for torchscript
+        self.final_norm = NeverRun()  # for torchscript
         if trans_layer.transformer_type == 'PreLN':
             self.final_norm = nn.LayerNorm(trans_layer.d_model)
         self.layers = [copy.deepcopy(trans_layer) for _ in range(num_layers)]
         self.layers = nn.ModuleList(self.layers)
 
-    def forward(self, x, multipliers = None):  
+    def forward(self, x : torch.Tensor, multipliers = None):  
         for layer in self.layers:           
             x = layer(x, multipliers)
         if self.transformer_type == 'PreLN':
