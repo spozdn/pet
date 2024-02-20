@@ -20,20 +20,8 @@ from .data_preparation import get_self_contributions, get_corrected_energies
 import argparse
 from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_forces
 
-def main():
+def fit_pet(train_structures, val_structures, hypers, name_of_calculation, device):
     TIME_SCRIPT_STARTED = time.time()
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("train_structures_path", help="Path to an xyz file with train structures", type = str)
-    parser.add_argument("val_structures_path", help="Path to an xyz file with validation structures", type = str)
-    parser.add_argument("provided_hypers_path", help="Path to a YAML file with provided hypers", type = str)
-    parser.add_argument("default_hypers_path", help="Path to a YAML file with default hypers", type = str)
-    parser.add_argument("name_of_calculation", help="Name of this calculation", type = str)
-    args = parser.parse_args()
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    hypers = set_hypers_from_files(args.provided_hypers_path, args.default_hypers_path)
     FITTING_SCHEME = hypers.FITTING_SCHEME
     MLIP_SETTINGS = hypers.MLIP_SETTINGS
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
@@ -46,18 +34,15 @@ def main():
     ARCHITECTURAL_HYPERS.TARGET_AGGREGATION = 'sum'  # energy is a sum of atomic energies
 
     set_reproducibility(FITTING_SCHEME.RANDOM_SEED, FITTING_SCHEME.CUDA_DETERMINISTIC)
-
-    train_structures = ase.io.read(args.train_structures_path, index = ':')
+    
     adapt_hypers(FITTING_SCHEME, train_structures)
-
-    val_structures = ase.io.read(args.val_structures_path, index = ':')
     structures = train_structures + val_structures 
     all_species = get_all_species(structures)
 
     if 'results' not in os.listdir('.'):
         os.mkdir('results')
     
-    name_to_load, NAME_OF_CALCULATION = get_calc_names(os.listdir('results'), args.name_of_calculation)
+    name_to_load, NAME_OF_CALCULATION = get_calc_names(os.listdir('results'), name_of_calculation)
 
     os.mkdir(f'results/{NAME_OF_CALCULATION}')
     np.save(f'results/{NAME_OF_CALCULATION}/all_species.npy', all_species)
@@ -295,6 +280,28 @@ def main():
         print(summary, file = f)
     
     print("total elapsed time: ", time.time() - TIME_SCRIPT_STARTED)
+
+
+def main():
+    
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("train_structures_path", help="Path to an xyz file with train structures", type = str)
+    parser.add_argument("val_structures_path", help="Path to an xyz file with validation structures", type = str)
+    parser.add_argument("provided_hypers_path", help="Path to a YAML file with provided hypers", type = str)
+    parser.add_argument("default_hypers_path", help="Path to a YAML file with default hypers", type = str)
+    parser.add_argument("name_of_calculation", help="Name of this calculation", type = str)
+    args = parser.parse_args()
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    train_structures = ase.io.read(args.train_structures_path, index = ':')
+    val_structures = ase.io.read(args.val_structures_path, index = ':')
+
+    hypers = set_hypers_from_files(args.provided_hypers_path, args.default_hypers_path)
+    name_of_calculation = args.name_of_calculation
+
+    fit_pet(train_structures, val_structures, hypers, name_of_calculation, device)
 
 if __name__ == "__main__":
     main()    
