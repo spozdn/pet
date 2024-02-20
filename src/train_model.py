@@ -20,7 +20,8 @@ from .data_preparation import get_self_contributions, get_corrected_energies
 import argparse
 from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_forces
 
-def fit_pet(train_structures, val_structures, hypers, name_of_calculation, device):
+
+def fit_pet(train_structures, val_structures, hypers, name_of_calculation, device, output_dir):
     TIME_SCRIPT_STARTED = time.time()
     FITTING_SCHEME = hypers.FITTING_SCHEME
     MLIP_SETTINGS = hypers.MLIP_SETTINGS
@@ -38,16 +39,13 @@ def fit_pet(train_structures, val_structures, hypers, name_of_calculation, devic
     adapt_hypers(FITTING_SCHEME, train_structures)
     structures = train_structures + val_structures 
     all_species = get_all_species(structures)
-
-    if 'results' not in os.listdir('.'):
-        os.mkdir('results')
     
-    name_to_load, NAME_OF_CALCULATION = get_calc_names(os.listdir('results'), name_of_calculation)
+    name_to_load, NAME_OF_CALCULATION = get_calc_names(os.listdir(output_dir), name_of_calculation)
 
-    os.mkdir(f'results/{NAME_OF_CALCULATION}')
-    np.save(f'results/{NAME_OF_CALCULATION}/all_species.npy', all_species)
+    os.mkdir(f'{output_dir}/{NAME_OF_CALCULATION}')
+    np.save(f'{output_dir}/{NAME_OF_CALCULATION}/all_species.npy', all_species)
     hypers.UTILITY_FLAGS.CALCULATION_TYPE = 'mlip'
-    save_hypers(hypers, f"results/{NAME_OF_CALCULATION}/hypers_used.yaml")
+    save_hypers(hypers, f"{output_dir}/{NAME_OF_CALCULATION}/hypers_used.yaml")
 
     print(len(train_structures))
     print(len(val_structures))
@@ -63,7 +61,7 @@ def fit_pet(train_structures, val_structures, hypers, name_of_calculation, devic
 
     if MLIP_SETTINGS.USE_ENERGIES:
         self_contributions = get_self_contributions(MLIP_SETTINGS.ENERGY_KEY, train_structures, all_species)
-        np.save(f'results/{NAME_OF_CALCULATION}/self_contributions.npy', self_contributions)
+        np.save(f'{output_dir}/{NAME_OF_CALCULATION}/self_contributions.npy', self_contributions)
 
         train_energies = get_corrected_energies(MLIP_SETTINGS.ENERGY_KEY, train_structures, all_species, self_contributions)
         val_energies = get_corrected_energies(MLIP_SETTINGS.ENERGY_KEY, val_structures, all_species, self_contributions)
@@ -96,7 +94,7 @@ def fit_pet(train_structures, val_structures, hypers, name_of_calculation, devic
     scheduler = get_scheduler(optim, FITTING_SCHEME)
 
     if name_to_load is not None:
-        load_checkpoint(model, optim, scheduler, f'results/{name_to_load}/checkpoint')
+        load_checkpoint(model, optim, scheduler, f'{output_dir}/{name_to_load}/checkpoint')
 
     history = []
     if MLIP_SETTINGS.USE_ENERGIES:
@@ -246,12 +244,12 @@ def fit_pet(train_structures, val_structures, hypers, name_of_calculation, devic
                 'model_state_dict': model.state_dict(),
                 'optim_state_dict': optim.state_dict(),
                 'scheduler_state_dict' : scheduler.state_dict(),
-                }, f'results/{NAME_OF_CALCULATION}/checkpoint')
-    with open(f'results/{NAME_OF_CALCULATION}/history.pickle', 'wb') as f:
+                }, f'{output_dir}/{NAME_OF_CALCULATION}/checkpoint')
+    with open(f'{output_dir}/{NAME_OF_CALCULATION}/history.pickle', 'wb') as f:
         pickle.dump(history, f)
 
     def save_model(model_name, model_keeper):
-        torch.save(model_keeper.best_model.state_dict(), f'results/{NAME_OF_CALCULATION}/{model_name}_state_dict')
+        torch.save(model_keeper.best_model.state_dict(), f'{output_dir}/{NAME_OF_CALCULATION}/{model_name}_state_dict')
 
     summary = ''
     if MLIP_SETTINGS.USE_ENERGIES:    
@@ -276,7 +274,7 @@ def fit_pet(train_structures, val_structures, hypers, name_of_calculation, devic
         save_model('best_val_rmse_both_model', multiplication_rmse_model_keeper)
         summary += f'best both (multiplication) rmse in energies: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n'
 
-    with open(f"results/{NAME_OF_CALCULATION}/summary.txt", 'w') as f:
+    with open(f"{output_dir}/{NAME_OF_CALCULATION}/summary.txt", 'w') as f:
         print(summary, file = f)
     
     print("total elapsed time: ", time.time() - TIME_SCRIPT_STARTED)
@@ -301,7 +299,11 @@ def main():
     hypers = set_hypers_from_files(args.provided_hypers_path, args.default_hypers_path)
     name_of_calculation = args.name_of_calculation
 
-    fit_pet(train_structures, val_structures, hypers, name_of_calculation, device)
+    output_dir = 'results'
+    if output_dir not in os.listdir('.'):
+        os.mkdir(output_dir)
+
+    fit_pet(train_structures, val_structures, hypers, name_of_calculation, device, output_dir)
 
 if __name__ == "__main__":
     main()    
