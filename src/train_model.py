@@ -10,7 +10,7 @@ import time
 import pickle
 from torch_geometric.nn import DataParallel
 
-from .hypers import save_hypers, set_hypers_from_files
+from .hypers import save_hypers, set_hypers_from_files, Hypers, hypers_to_dict
 from .pet import PET, PETMLIPWrapper, PETUtilityWrapper
 from .utilities import FullLogger, get_scheduler, load_checkpoint, get_data_loaders
 from .utilities import get_rmse, get_loss, set_reproducibility, get_calc_names
@@ -21,8 +21,13 @@ import argparse
 from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_forces
 
 
-def fit_pet(train_structures, val_structures, hypers, name_of_calculation, device, output_dir):
+def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, device, output_dir):
     TIME_SCRIPT_STARTED = time.time()
+
+    if output_dir not in os.listdir('.'):
+        os.mkdir(output_dir)
+
+    hypers = Hypers(hypers_dict)
     FITTING_SCHEME = hypers.FITTING_SCHEME
     MLIP_SETTINGS = hypers.MLIP_SETTINGS
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
@@ -300,10 +305,9 @@ def main():
     name_of_calculation = args.name_of_calculation
 
     output_dir = 'results'
-    if output_dir not in os.listdir('.'):
-        os.mkdir(output_dir)
 
-    fit_pet(train_structures, val_structures, hypers, name_of_calculation, device, output_dir)
+    hypers_dict = hypers_to_dict(hypers)
+    fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, device, output_dir)
 
 if __name__ == "__main__":
     main()    
