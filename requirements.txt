@@ -6,4 +6,6 @@ jupyter
 scikit-learn
 argparse
 torch
+torch-sparse
+torch-scatter
 torch_geometric
