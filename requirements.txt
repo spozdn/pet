@@ -5,6 +5,4 @@ pathos
 jupyter
 scikit-learn
 torch
-torch-sparse
-torch-scatter
 torch_geometric
