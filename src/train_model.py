@@ -24,7 +24,7 @@ from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_forces
 def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, device, output_dir):
     TIME_SCRIPT_STARTED = time.time()
 
-    if output_dir not in os.listdir('.'):
+    if not os.path.exists(output_dir):
         os.mkdir(output_dir)
 
     hypers = Hypers(hypers_dict)
