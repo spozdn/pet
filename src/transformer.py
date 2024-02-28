@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from torch import nn
 import torch.nn.functional as F
+from typing import Optional
 
 import copy
 from .utilities import NeverRun
@@ -27,7 +28,7 @@ class AttentionBlock(nn.Module):
         self.head_dim = total_dim // num_heads        
         self.preconditioning = 1.0 / np.sqrt(self.head_dim)
         
-    def forward(self, x, multipliers = None):
+    def forward(self, x, multipliers: Optional[torch.Tensor] = None):
         initial_shape = x.shape        
         x = self.input_linear(x)
         x = x.reshape(initial_shape[0], initial_shape[1], 3, self.num_heads, self.head_dim)
@@ -71,7 +72,7 @@ class TransformerLayer(torch.nn.Module):
                                  nn.Dropout(dropout)) 
 
 
-    def forward(self, x, multipliers = None): 
+    def forward(self, x, multipliers: Optional[torch.Tensor] = None): 
         if self.transformer_type == 'PostLN':
             x = self.norm_attention(x + self.dropout(self.attention(x, multipliers)))
             x = self.norm_mlp(x + self.mlp(x))
@@ -91,7 +92,7 @@ class Transformer(torch.nn.Module):
         self.layers = [copy.deepcopy(trans_layer) for _ in range(num_layers)]
         self.layers = nn.ModuleList(self.layers)
 
-    def forward(self, x : torch.Tensor, multipliers = None):  
+    def forward(self, x : torch.Tensor, multipliers: Optional[torch.Tensor] = None):  
         for layer in self.layers:           
             x = layer(x, multipliers)
         if self.transformer_type == 'PreLN':
