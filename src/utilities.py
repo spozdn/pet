@@ -6,7 +6,8 @@ from torch.optim.lr_scheduler import LambdaLR
 from scipy.spatial.transform import Rotation
 from torch_geometric.loader import DataLoader, DataListLoader
 import copy
-
+from scipy.special import roots_legendre
+from scipy.spatial.transform import Rotation as R
 
 def get_calc_names(all_completed_calcs, current_name):
     name_to_load = None
@@ -312,3 +313,22 @@ class NeverRun(torch.nn.Module):
 
     def forward(self, x) -> torch.Tensor:
         raise RuntimeError("This model should never be run")
+
+
+def get_quadrature(L):
+    matrices, weights = [], []
+    for theta_index in range(0, 2 * L - 1):
+        for w_index in range(0, 2 * L - 1):
+            theta = 2 * np.pi * theta_index / (2 * L - 1)
+            w = 2 * np.pi * w_index / (2 * L - 1)
+            roots_legendre_now, weights_now = roots_legendre(L)
+            all_v = np.arccos(roots_legendre_now)
+            for v, weight in zip(all_v, weights_now):
+                weights.append(weight)
+                angles = [theta, v, w]
+                rotation =  R.from_euler('xyz', angles, degrees=False)
+                rotation_matrix = rotation.as_matrix()
+                matrices.append(rotation_matrix)
+
+    return matrices, weights
+            
