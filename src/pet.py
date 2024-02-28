@@ -320,6 +320,7 @@ class MessagesPredictor(torch.nn.Module):
     def forward(self, messages: torch.Tensor, mask: torch.Tensor, nums: torch.Tensor,
                  central_species: torch.Tensor, multipliers : torch.Tensor):
         messages_proceed = messages * multipliers[:, :, None]
+      
         messages_proceed[mask] = 0.0
         if self.AVERAGE_POOLING:
             pooled = messages_proceed.sum(dim = 1) / nums[:, None]
@@ -340,7 +341,9 @@ class MessagesBondsPredictor(torch.nn.Module):
                  central_species: torch.Tensor):
         predictions = self.head({'pooled' : messages, 
                                      'central_species' : central_species})['atomic_predictions']
-        predictions[mask] = 0.0
+        
+        mask_expanded = mask[..., None].repeat(1, 1, predictions.shape[2])
+        predictions = torch.where(mask_expanded, 0.0, predictions)
         if self.AVERAGE_BOND_ENERGIES:
             result = predictions.sum(dim = 1) / nums
         else:
