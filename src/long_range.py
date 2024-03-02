@@ -52,41 +52,65 @@ class LongRangeInteraction(torch.nn.Module):
                                     nn.Linear(d_pet, d_pet))
         
     def forward(self, k_vectors, positions, batch, h):
-        s = get_s(k_vectors, positions, h, batch)
-        filter_values = self.filter_calculator(k_vectors)
-        predictions = get_new_h(k_vectors, positions, s, filter_values, batch)
-        return predictions
+        '''
+        k_vectors: [B, N_k, 3]; real
+        positions: [N_B, 3]; real
+        h: [N_B, d_pet]; real
+        batch: [N_B]; long
+        '''
+
+        s = get_s(k_vectors, positions, h, batch) # [B, N_k, d_pet]; complex
+        filter_values = self.filter_calculator(k_vectors) # [B, N_k, d_pet]; real
+        predictions = get_new_h(k_vectors, positions, s, filter_values, batch) # [N_B, d_pet]; real
+        # convert predictions to real, and check that im part is zero
+        return predictions # [N_B, d_pet]
         
 
 def get_s(k_vectors, positions, h, batch):
-    batch_size = k_vectors.shape[0]
-    N_k = k_vectors.shape[1]
+    '''
+    k_vectors: [B, N_k, 3]
+    positions: [N_B, 3]
+    h: [N_B, d_pet]
+    batch: [N_B]
+    '''
+    batch_size = k_vectors.shape[0] # B
+    N_k = k_vectors.shape[1] # N_k
     d_pet = h.shape[1]
     
-    k_vectors = k_vectors[batch]
-    positions = positions[:, None, :]
-    positions = positions.repeat(1, N_k, 1)
+    k_vectors = k_vectors[batch] # [N_B, N_k, 3]
+    positions = positions[:, None, :] # [N_B, 1, 3] 
+    positions = positions.repeat(1, N_k, 1) # [N_B, N_k, 3]
     
-    k_pos = torch.sum(positions * k_vectors, dim = 2)
-    h = h[:, None, :]
-    h = h.repeat(1, N_k, 1)
-    products = torch.exp(-1j * k_pos)[:, :, None] * h
-    s = torch.zeros(batch_size, N_k, d_pet)
-    s.index_add(0, batch, products)
+    k_pos = torch.sum(positions * k_vectors, dim = 2) # [N_B, N_k]
+    h = h[:, None, :] # [N_B, 1, d_pet]
+    h = h.repeat(1, N_k, 1) # [N_b, N_k, d_pet]
+    products = torch.exp(-1j * k_pos)[:, :, None] * h # [N_B, N_k, d_pet]
+    s = torch.zeros(batch_size, N_k, d_pet) # [B, N_k, d_pet]
+    s.index_add(0, batch, products) # [B, N_k, d_pet]
     return s
 
 
 def get_new_h(k_vectors, positions, s, filter_values, batch):
+    '''
+    k_vectors: [B, N_k, 3]
+    positions: [N_B, 3]
+    s: [B, N_k, d_pet]
+    filter_values: [B, N_k, d_pet]
+    batch: [N_B]
+    '''
     N_k = k_vectors.shape[1]
+    d_pet = filter_values.shape[2]
+
+    positions = positions[:, None, :] # [N_B, 1, 3] 
+    positions = positions.repeat(1, N_k, 1) # [N_B, N_k, 3]
+
+    k_vectors = k_vectors[batch] # [N_B, N_k, 3]
+    k_pos = torch.sum(positions * k_vectors, dim = 2)  # [N_B, N_k]
+    k_pos = torch.exp(1j * k_pos)  # [N_B, N_k]
     
-    positions = positions.repeat(1, N_k, 1)
-    k_pos = torch.sum(positions * k_vectors, dim = 2)
-    k_pos = torch.exp(1j * k_pos)
+    s = s[batch] # [N_B, N_k, d_pet]
+    filter_values = filter_values[batch] # [N_B, N_k, d_pet]
     
-    s = s[batch]
-    filter_values = filter_values[batch]
-    filter_values = filter_values[:, None, :].repeat(1, N_k, 1)
-    
-    k_pos = k_pos[:, None, :].repeat(1, N_k, 1)
-    product = k_pos * s * filter_values
-    return torch.sum(product, dim = 1)
+    k_pos = k_pos[:, :, None].repeat(1, 1, d_pet) #[N_B, N_k, d_pet]
+    product = k_pos * s * filter_values #[N_B, N_k, d_pet]
+    return torch.sum(product, dim = 1) #[N_B, d_pet]
