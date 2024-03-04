@@ -139,13 +139,14 @@ class Molecule():
         if self.use_long_range:
             kwargs['cell'] = torch.FloatTensor(self.cell)[None]
             kwargs['reciprocal'] = torch.FloatTensor(self.reciprocal)[None]
-            k_vectors = np.zeros([1, len(max_num_k), 3])
+            k_vectors = np.zeros([1, max_num_k, 3])
             k_mask = np.zeros([max_num_k], dtype = bool)
             for index in range(len(self.k_vectors)):
                 k_vectors[0, index] = self.k_vectors[index]
                 k_mask[index] = True
             kwargs['k_vectors'] = torch.FloatTensor(k_vectors)
             kwargs['k_mask'] = torch.BoolTensor(k_mask)[None]
+            kwargs['positions'] = torch.FloatTensor(self.atoms.get_positions())
 
         result = Data(**kwargs)
     
@@ -165,6 +166,15 @@ def batch_to_dict(batch):
         batch_dict['neighbor_scalar_attributes'] = batch.neighbor_scalar_attributes
     if hasattr(batch, 'central_scalar_attributes'):
         batch_dict['central_scalar_attributes'] = batch.central_scalar_attributes
+
+    if hasattr(batch, 'k_vectors'):
+        batch_dict['k_vectors'] = batch.k_vectors
+
+    if hasattr(batch, 'k_mask'):
+        batch_dict['k_mask'] = batch.k_mask
+
+    if hasattr(batch, 'positions'):
+        batch_dict['positions'] = batch.positions
         
     return batch_dict
 

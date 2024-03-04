@@ -25,7 +25,7 @@ ARCHITECTURAL_HYPERS:
   TRANSFORMER_TYPE: PostLN # PostLN or PreLN
   USE_LONG_RANGE: False
   K_CUT: None # should be float; only used when USE_LONG_RANGE is True
-
+  K_CUT_DELTA: None
 
 FITTING_SCHEME:  
   INITIAL_LR: 1e-4
