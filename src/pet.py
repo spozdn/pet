@@ -509,7 +509,7 @@ class PETUtilityWrapper(torch.nn.Module):
     def forward(self, batch, augmentation):
         batch_dict = batch_to_dict(batch)
         rotations = None
-        if augmentation is not None:
+        if augmentation:
             indices = batch.batch.cpu().data.numpy()
             rotations = torch.FloatTensor(get_rotations(indices,
                                                          global_aug = self.global_aug)).to(batch.x.device)

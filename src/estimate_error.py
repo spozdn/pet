@@ -54,7 +54,7 @@ def main():
     
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
 
-    set_reproducibility(FITTING_SCHEME.RANDOM_SEED, FITTING_SCHEME.CUDA_DETERMINISTIC)
+    # set_reproducibility(FITTING_SCHEME.RANDOM_SEED, FITTING_SCHEME.CUDA_DETERMINISTIC)
 
     if args.batch_size == -1:
         args.batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE
@@ -138,8 +138,8 @@ def main():
                 self_contributions_energies.append(np.dot(compositional_features[i], self_contributions))
             self_contributions_energies = np.array(self_contributions_energies)
 
-            all_energies_predicted = all_energies_predicted + self_contributions_energies[:, np.newaxis]
-
+            all_energies_predicted = all_energies_predicted + self_contributions_energies[np.newaxis, :]
+            
             report_accuracy(all_energies_predicted, energies_ground_truth, "energies",
                             args.verbose, specify_per_component = False,
                             target_type = 'structural', n_atoms = n_atoms,
