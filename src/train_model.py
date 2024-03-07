@@ -257,12 +257,16 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
         torch.save(model_keeper.best_model.state_dict(), f'{output_dir}/{NAME_OF_CALCULATION}/{model_name}_state_dict')
 
     summary = ''
-    if MLIP_SETTINGS.USE_ENERGIES:    
+    if MLIP_SETTINGS.USE_ENERGIES:
+        if FITTING_SCHEME.ENERGIES_LOSS == 'per_structure':
+            postfix = "per structure"
+        if FITTING_SCHEME.ENERGIES_LOSS == 'per_atom':  
+            postfix = "per atom" 
         save_model('best_val_mae_energies_model', energies_mae_model_keeper)
-        summary += f'best val mae in energies: {energies_mae_model_keeper.best_error} at epoch {energies_mae_model_keeper.best_epoch}\n'
+        summary += f'best val mae in energies {postfix}: {energies_mae_model_keeper.best_error} at epoch {energies_mae_model_keeper.best_epoch}\n'
 
         save_model('best_val_rmse_energies_model', energies_rmse_model_keeper)
-        summary += f'best val rmse in energies: {energies_rmse_model_keeper.best_error} at epoch {energies_rmse_model_keeper.best_epoch}\n'
+        summary += f'best val rmse in energies {postfix}: {energies_rmse_model_keeper.best_error} at epoch {energies_rmse_model_keeper.best_epoch}\n'
 
     if MLIP_SETTINGS.USE_FORCES:
         save_model('best_val_mae_forces_model', forces_mae_model_keeper)
@@ -273,11 +277,11 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
 
     if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES:
         save_model('best_val_mae_both_model', multiplication_mae_model_keeper)
-        summary += f'best both (multiplication) mae in energies: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
+        summary += f'best both (multiplication) mae in energies {postfix}: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n'
 
 
         save_model('best_val_rmse_both_model', multiplication_rmse_model_keeper)
-        summary += f'best both (multiplication) rmse in energies: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n'
+        summary += f'best both (multiplication) rmse in energies {postfix}: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n'
 
     with open(f"{output_dir}/{NAME_OF_CALCULATION}/summary.txt", 'w') as f:
         print(summary, file = f)
