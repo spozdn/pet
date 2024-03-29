@@ -165,7 +165,7 @@ class PETSP(torch.nn.Module):
         if self.n_aug is None:
             additional_rotations = [torch.eye(3)]
         else:
-            additional_rotations = [torch.FloatTensor(el) for el in Rotation.random(self.n_aug).as_matrix()]
+            additional_rotations = [torch.tensor(el, device=batch.x.device, dtype=batch.x.dtype) for el in Rotation.random(self.n_aug).as_matrix()]
             
         predictions_total, forces_predicted_total = 0.0, 0.0
         n_frames = None

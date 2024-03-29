@@ -223,7 +223,7 @@ class SPFramesCalculator():
         for species_now in coor_systems_species:
             now = species_now[0] * num_species * num_species + species_now[1] * num_species + species_now[2]
             result.append(now)
-        return torch.FloatTensor(result).to(device)
+        return torch.tensor(result, dtype=torch.get_default_dtype(), device=device)
     
     
     def get_all_frames_global(self, envs_list, r_cut_initial, num_species, epsilon = 1e-10):

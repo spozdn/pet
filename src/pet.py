@@ -170,7 +170,7 @@ class CartesianTransformer(torch.nn.Module):
         if self.USE_LENGTH:
             neighbor_lengths = torch.sqrt(torch.sum(x ** 2, dim = 2) + 1e-15)[:, :, None]
         else:
-            neighbor_lengths = torch.FloatTensor()  # for torch script
+            neighbor_lengths = torch.empty(0, device=x.device, dtype=x.dtype)  # for torch script
 
         central_species = batch_dict['central_species']
         neighbor_species = batch_dict['neighbor_species']
@@ -182,14 +182,14 @@ class CartesianTransformer(torch.nn.Module):
         if self.BLEND_NEIGHBOR_SPECIES and (not self.is_first):
             neighbor_embedding = self.neighbor_embedder(neighbor_species)
         else:
-            neighbor_embedding = torch.FloatTensor()  # for torch script
+            neighbor_embedding = torch.empty(0, device=x.device, dtype=x.dtype)  # for torch script
             
         if self.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             neighbor_scalar_attributes = batch_dict['neighbor_scalar_attributes']
             central_scalar_attributes = batch_dict['central_scalar_attributes']
         else:
-            neighbor_scalar_attributes = torch.FloatTensor()  # for torch script
-            central_scalar_attributes = torch.FloatTensor()  # for torch script
+            neighbor_scalar_attributes = torch.empty(0, device=x.device, dtype=x.dtype)  # for torch script
+            central_scalar_attributes = torch.empty(0, device=x.device, dtype=x.dtype)  # for torch script
         
         initial_n_tokens = x.shape[1]
         max_number = int(torch.max(nums))
@@ -457,7 +457,7 @@ class PET(torch.nn.Module):
         neighbors_pos = batch_dict['neighbors_pos']
         
         batch_dict['input_messages'] = self.embedding(neighbor_species)
-        atomic_predictions = torch.FloatTensor([0]).to(x.device)
+        atomic_predictions = torch.zeros(1, dtype=x.dtype, device=x.device)
         
         for layer_index, (central_tokens_predictor, messages_predictor, gnn_layer, messages_bonds_predictor) in enumerate(zip(self.central_tokens_predictors, self.messages_predictors, self.gnn_layers, self.messages_bonds_predictors)):
             
@@ -511,8 +511,10 @@ class PETUtilityWrapper(torch.nn.Module):
         rotations = None
         if augmentation:
             indices = batch.batch.cpu().data.numpy()
-            rotations = torch.FloatTensor(get_rotations(indices,
-                                                         global_aug = self.global_aug)).to(batch.x.device)
+            rotations = torch.tensor(
+                get_rotations(indices, global_aug=self.global_aug),
+                device=batch.x.device, dtype=batch.x.dtype
+            )
         return self.pet_model(batch_dict, rotations)
 
 class PETMLIPWrapper(torch.nn.Module):
