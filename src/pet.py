@@ -565,3 +565,16 @@ class PETMLIPWrapper(torch.nn.Module):
             result.append(None)
             
         return result
+    
+class SelfContributionsWrapper(torch.nn.Module):
+    def __init__(self, model, self_contributions, all_species):
+        super(SelfContributionsWrapper, self).__init__()
+        self.model = model
+        self.register_buffer('self_contributions', torch.tensor(self_contributions, dtype = torch.get_default_dtype()))
+        self.all_species = all_species
+
+    def forward(self, batch_dict):
+        predictions = self.model(batch_dict)
+        compositional_features = batch_dict['compositional_features'] # [N_structures, N_species]
+        self_contribution_energies = torch.matmul(compositional_features, self.self_contributions) # [N_structures]
+        return predictions + self_contribution_energies[:, None]
