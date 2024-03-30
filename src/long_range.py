@@ -26,10 +26,13 @@ def get_all_k_from_reciprocal(w_1, w_2, w_3, k_cut):
 
     return result
 
-
-def get_reciprocal(v_1, v_2, v_3):
+def get_volume(v_1, v_2, v_3):
     cross = np.cross(v_2, v_3)
     volume = np.abs(np.sum(v_1 * cross))
+    return volume
+
+def get_reciprocal(v_1, v_2, v_3):
+    volume = get_volume(v_1, v_2, v_3)
     w_1 = 2 * np.pi * np.cross(v_2, v_3) / volume
     w_2 = 2 * np.pi * np.cross(v_3, v_1) / volume
     w_3 = 2 * np.pi * np.cross(v_1, v_2) / volume

@@ -3,7 +3,7 @@ import torch
 import ase.io
 import numpy as np
 from torch_geometric.data import Data
-from .long_range import get_reciprocal, get_all_k
+from .long_range import get_reciprocal, get_all_k, get_volume
 
 class Molecule():
     def __init__(self, atoms, r_cut, use_additional_scalar_attributes, 
@@ -66,6 +66,7 @@ class Molecule():
             self.reciprocal = reciprocal
             self.k_vectors = get_all_k(self.cell[0], self.cell[1], self.cell[2], k_cut)
             self.k_cut = k_cut
+            self.volume = get_volume(self.cell[0], self.cell[1], self.cell[2])
                              
     def get_max_num(self):
         maximum = None
@@ -147,6 +148,7 @@ class Molecule():
             kwargs['k_vectors'] = torch.FloatTensor(k_vectors)
             kwargs['k_mask'] = torch.BoolTensor(k_mask)[None]
             kwargs['positions'] = torch.FloatTensor(self.atoms.get_positions())
+            kwargs['volume'] = torch.tensor(self.volume, dtype = torch.get_default_dtype())
 
         result = Data(**kwargs)
     
@@ -175,6 +177,9 @@ def batch_to_dict(batch):
 
     if hasattr(batch, 'positions'):
         batch_dict['positions'] = batch.positions
+
+    if hasattr(batch, 'volume'):
+        batch_dict['volume'] = batch.volume
         
     return batch_dict
 
