@@ -581,3 +581,15 @@ class SelfContributionsWrapper(torch.nn.Module):
         compositional_features = batch_dict['compositional_features'] # [N_structures, N_species]
         self_contribution_energies = torch.matmul(compositional_features, self.self_contributions) # [N_structures]
         return predictions + self_contribution_energies[:, None]
+    
+
+class FlagsWrapper(torch.nn.Module):
+    '''For DataParallel'''
+    def __init__(self, model):
+        super(FlagsWrapper, self).__init__()
+        self.model = model
+        self.augmentation = None
+        self.create_graph = None
+
+    def forward(self, batch):
+        return self.model(batch, augmentation = self.augmentation, create_graph = self.create_graph)

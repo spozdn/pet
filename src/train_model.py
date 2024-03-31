@@ -19,7 +19,7 @@ from .analysis import adapt_hypers
 from .data_preparation import get_self_contributions, get_corrected_energies
 import argparse
 from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_forces
-
+from .pet import FlagsWrapper
 
 def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, device, output_dir):
     TIME_SCRIPT_STARTED = time.time()
@@ -89,7 +89,7 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
 
     model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
     if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
-        model = DataParallel(model)
+        model = DataParallel(FlagsWrapper(model))
         model = model.to(torch.device('cuda:0'))
     
     if FITTING_SCHEME.MODEL_TO_START_WITH is not None:
@@ -140,7 +140,13 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
             if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
-            predictions_energies, predictions_forces = model(batch, augmentation = True, create_graph = True)
+            if FITTING_SCHEME.MULTI_GPU:
+                model.module.augmentation = True
+                model.module.create_graph = True
+                predictions_energies, predictions_forces = model(batch)
+            else:
+                predictions_energies, predictions_forces = model(batch, augmentation = True, create_graph = True)
+            
             if FITTING_SCHEME.ENERGIES_LOSS == 'per_atom':
                 predictions_energies = predictions_energies / batch.n_atoms
                 ground_truth_energies = batch.y / batch.n_atoms
@@ -174,7 +180,12 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
             if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
-            predictions_energies, predictions_forces = model(batch, augmentation = False, create_graph = False)
+            if FITTING_SCHEME.MULTI_GPU:
+                model.module.augmentation = False
+                model.module.create_graph = False
+                predictions_energies, predictions_forces = model(batch)
+            else:
+                predictions_energies, predictions_forces = model(batch, augmentation = False, create_graph = False)
             
             if FITTING_SCHEME.ENERGIES_LOSS == 'per_atom':
                 predictions_energies = predictions_energies / batch.n_atoms
