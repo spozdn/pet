@@ -574,13 +574,26 @@ class SelfContributionsWrapper(torch.nn.Module):
     def __init__(self, model, self_contributions):
         super(SelfContributionsWrapper, self).__init__()
         self.model = model
-        self.register_buffer('self_contributions', torch.tensor(self_contributions, dtype = torch.get_default_dtype()))
+        self.register_buffer('self_contributions', torch.tensor(self_contributions,
+                                                                dtype = torch.get_default_dtype()))
         
+         if self.model.hypers.ARCHITECTURAL_HYPERS.TARGET_TYPE == 'structural':
+            if self.model.hypers.ARCHITECTURAL_HYPERS.TARGET_AGGREGATION == 'mean':
+                raise ValueError("self contributions wrapper is made only for sum aggregation, not for mean")
+                
+        if self.model.hypers.ARCHITECTURAL_HYPERS.D_OUTPUT != 1:
+            raise ValueError("self contributions wrapper is made only for D_OUTPUT = 1")
+                
     def forward(self, batch_dict):
         predictions = self.model(batch_dict)
-        compositional_features = batch_dict['compositional_features'] # [N_structures, N_species]
-        self_contribution_energies = torch.matmul(compositional_features, self.self_contributions) # [N_structures]
-        return predictions + self_contribution_energies[:, None]
+        central_species = batch_dict['central_species']
+        
+        self_contribution_energies = self.self_contributions[central_species][:, None]
+        if self.model.hypers.ARCHITECTURAL_HYPERS.TARGET_TYPE == 'structural':
+            self_contribution_energies = torch_geometric.nn.global_add_pool(self_contribution_energies,
+                                                  batch=batch_dict['batch'])
+            
+        return predictions + self_contribution_energies
     
 
 class FlagsWrapper(torch.nn.Module):
