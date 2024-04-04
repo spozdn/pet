@@ -35,6 +35,7 @@ FITTING_SCHEME:
   GLOBAL_AUG: True
   SLIDING_FACTOR: 0.7
   ATOMIC_BATCH_SIZE: 850 # structural version is called "STRUCTURAL_BATCH_SIZE"
+  BALANCED_DATA_LOADER: False # if True, use DynamicBatchSampler from torch_geometric
   MAX_TIME: 234000
   ENERGY_WEIGHT: 0.1 # only used when fitting MLIP
   MULTI_GPU: False

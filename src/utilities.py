@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from torch.optim.lr_scheduler import LambdaLR
 from scipy.spatial.transform import Rotation
-from torch_geometric.loader import DataLoader, DataListLoader
+from torch_geometric.loader import DataLoader, DataListLoader, DynamicBatchSampler
 import copy
 from scipy.special import roots_legendre
 from scipy.spatial.transform import Rotation as R
@@ -240,12 +240,23 @@ def get_data_loaders(train_graphs, val_graphs, FITTING_SCHEME):
     g = torch.Generator()
     g.manual_seed(FITTING_SCHEME.RANDOM_SEED)
 
-    if FITTING_SCHEME.MULTI_GPU:
-        train_loader = DataListLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-        val_loader = DataListLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+    if FITTING_SCHEME.BALANCED_DATA_LOADER:
+        train_sampler = DynamicBatchSampler(train_graphs, max_num=FITTING_SCHEME.ATOMIC_BATCH_SIZE, mode="node", shuffle = True)
+        val_sampler = DynamicBatchSampler(val_graphs, max_num=FITTING_SCHEME.ATOMIC_BATCH_SIZE, mode="node", shuffle = False)
+
+        if FITTING_SCHEME.MULTI_GPU:
+            train_loader = DataListLoader(train_graphs, batch_sampler=train_sampler, worker_init_fn=seed_worker, generator=g)
+            val_loader = DataListLoader(val_graphs, batch_sampler=val_sampler, worker_init_fn=seed_worker, generator=g)
+        else:
+            train_loader = DataLoader(train_graphs, batch_sampler=train_sampler, worker_init_fn=seed_worker, generator=g)
+            val_loader = DataLoader(val_graphs, batch_sampler=val_sampler, worker_init_fn=seed_worker, generator=g)
     else:
-        train_loader = DataLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-        val_loader = DataLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+        if FITTING_SCHEME.MULTI_GPU:
+            train_loader = DataListLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
+            val_loader = DataListLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+        else:
+            train_loader = DataLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
+            val_loader = DataLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
 
     return train_loader, val_loader
 
