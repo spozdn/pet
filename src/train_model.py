@@ -19,7 +19,9 @@ from .analysis import adapt_hypers
 from .data_preparation import get_self_contributions, get_corrected_energies
 import argparse
 from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_forces
+from .utilities import dtype2string, string2dtype
 from .pet import FlagsWrapper
+
 
 def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, device, output_dir):
     TIME_SCRIPT_STARTED = time.time()
@@ -28,6 +30,9 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
         os.mkdir(output_dir)
 
     hypers = Hypers(hypers_dict)
+    dtype = string2dtype(hypers.ARCHITECTURAL_HYPERS.DTYPE)
+    torch.set_default_dtype(dtype)
+
     FITTING_SCHEME = hypers.FITTING_SCHEME
     MLIP_SETTINGS = hypers.MLIP_SETTINGS
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
@@ -94,6 +99,7 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
     
     if FITTING_SCHEME.MODEL_TO_START_WITH is not None:
         model.load_state_dict(torch.load(FITTING_SCHEME.MODEL_TO_START_WITH))
+        model = model.to(dtype = dtype)
 
     optim = get_optimizer(model, FITTING_SCHEME)
     scheduler = get_scheduler(optim, FITTING_SCHEME)
@@ -111,7 +117,7 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
     if MLIP_SETTINGS.USE_FORCES:
         val_forces = torch.cat(val_forces, dim = 0)
 
-        sliding_forces_rmse = get_rmse(val_forces.data.cpu().numpy(), 0.0)
+        sliding_forces_rmse = get_rmse(val_forces.data.cpu().to(dtype = torch.float32).numpy(), 0.0)
 
         forces_rmse_model_keeper = ModelKeeper()
         forces_mae_model_keeper = ModelKeeper()
@@ -300,6 +306,7 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
                 'model_state_dict': model.state_dict(),
                 'optim_state_dict': optim.state_dict(),
                 'scheduler_state_dict' : scheduler.state_dict(),
+                'dtype_used' : dtype2string(dtype),
                 }, f'{output_dir}/{NAME_OF_CALCULATION}/checkpoint')
     with open(f'{output_dir}/{NAME_OF_CALCULATION}/history.pickle', 'wb') as f:
         pickle.dump(history, f)
@@ -357,6 +364,7 @@ def main():
     val_structures = ase.io.read(args.val_structures_path, index = ':')
 
     hypers = set_hypers_from_files(args.provided_hypers_path, args.default_hypers_path)
+    
     name_of_calculation = args.name_of_calculation
 
     output_dir = 'results'

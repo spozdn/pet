@@ -110,8 +110,8 @@ class Molecule():
             
             
         mask = np.concatenate(mask, axis = 0)
-        relative_positions = torch.FloatTensor(relative_positions)
-        nums = torch.FloatTensor(nums)
+        relative_positions = torch.tensor(relative_positions, dtype=torch.get_default_dtype())
+        nums = torch.tensor(nums, dtype=torch.get_default_dtype())
         mask = torch.BoolTensor(mask)
         
         neighbors_pos = torch.LongTensor(neighbors_pos)
@@ -134,21 +134,34 @@ class Molecule():
                   'n_atoms' : len(self.atoms.positions)}
         
         if self.use_additional_scalar_attributes:
-            kwargs['neighbor_scalar_attributes'] = torch.FloatTensor(neighbor_scalar_attributes)
-            kwargs['central_scalar_attributes'] = torch.FloatTensor(self.central_scalar_attributes)
+            kwargs['neighbor_scalar_attributes'] = torch.tensor(
+                neighbor_scalar_attributes, dtype=torch.get_default_dtype()
+            )
+            kwargs['central_scalar_attributes'] = torch.tensor(
+                self.central_scalar_attributes, dtype=torch.get_default_dtype()
+            )
 
         if self.use_long_range:
-            kwargs['cell'] = torch.FloatTensor(self.cell)[None]
-            kwargs['reciprocal'] = torch.FloatTensor(self.reciprocal)[None]
+            kwargs['cell'] = torch.tensor(
+                self.cell, dtype=torch.get_default_dtype()
+            )[None]
+            kwargs['reciprocal'] = torch.tensor(
+                self.reciprocal, dtype=torch.get_default_dtype()
+            )[None]
             k_vectors = np.zeros([1, max_num_k, 3])
-            k_mask = np.zeros([max_num_k], dtype = bool)
+            k_mask = np.zeros([max_num_k], dtype=bool)
             for index in range(len(self.k_vectors)):
                 k_vectors[0, index] = self.k_vectors[index]
                 k_mask[index] = True
-            kwargs['k_vectors'] = torch.FloatTensor(k_vectors)
+            kwargs['k_vectors'] = torch.tensor(
+                k_vectors, dtype=torch.get_default_dtype()
+            )
             kwargs['k_mask'] = torch.BoolTensor(k_mask)[None]
-            kwargs['positions'] = torch.FloatTensor(self.atoms.get_positions())
+
+            kwargs['positions'] = torch.tensor(
+                self.atoms.get_positions(), dtype=torch.get_default_dtype())
             kwargs['volume'] = torch.tensor(self.volume, dtype = torch.get_default_dtype())
+
 
         result = Data(**kwargs)
     
@@ -239,7 +252,7 @@ class NeighborIndexConstructor:
             
         mask = np.concatenate(mask, axis = 0)
         relative_positions = torch.LongTensor(relative_positions)
-        nums = torch.FloatTensor(nums)
+        nums = torch.tensor(nums, dtype=torch.get_default_dtype())
         mask = torch.BoolTensor(mask)
         
         neighbors_pos = torch.LongTensor(neighbors_pos)

@@ -18,6 +18,7 @@ from .utilities import get_optimizer
 from .analysis import adapt_hypers
 import argparse
 from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_targets
+from .utilities import dtype2string, string2dtype
 
 def main():
     TIME_SCRIPT_STARTED = time.time()
@@ -33,6 +34,9 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     hypers = set_hypers_from_files(args.provided_hypers_path, args.default_hypers_path)
+    dtype = string2dtype(hypers.ARCHITECTURAL_HYPERS.DTYPE)
+    torch.set_default_dtype(dtype)
+
     FITTING_SCHEME = hypers.FITTING_SCHEME
     GENERAL_TARGET_SETTINGS = hypers.GENERAL_TARGET_SETTINGS
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
@@ -90,6 +94,7 @@ def main():
     
     if FITTING_SCHEME.MODEL_TO_START_WITH is not None:
         model.load_state_dict(torch.load(FITTING_SCHEME.MODEL_TO_START_WITH))
+        model = model.to(dtype = dtype)
 
     optim = get_optimizer(model, FITTING_SCHEME)
     scheduler = get_scheduler(optim, FITTING_SCHEME)
@@ -159,6 +164,7 @@ def main():
                 'model_state_dict': model.state_dict(),
                 'optim_state_dict': optim.state_dict(),
                 'scheduler_state_dict' : scheduler.state_dict(),
+                'dtype_used' : dtype2string(dtype),
                 }, f'results/{NAME_OF_CALCULATION}/checkpoint')
     with open(f'results/{NAME_OF_CALCULATION}/history.pickle', 'wb') as f:
         pickle.dump(history, f)

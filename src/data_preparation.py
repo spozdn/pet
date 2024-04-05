@@ -15,7 +15,7 @@ def get_all_species(structures):
 def get_forces(structures, FORCES_KEY):
     forces = []
     for structure in structures:
-        forces.append(torch.FloatTensor(structure.arrays[FORCES_KEY]))
+        forces.append(torch.tensor(structure.arrays[FORCES_KEY], dtype=torch.get_default_dtype()))
     return forces
 
 
@@ -79,7 +79,7 @@ def get_targets(structures, GENERAL_TARGET_SETTINGS):
             if len(target_now.shape) != 2:
                 raise ValueError("atomic target must be 2D array")
             
-        targets.append(torch.FloatTensor(target_now))
+        targets.append(torch.tensor(target_now, dtype=torch.get_default_dtype()))
     return targets
         
 def get_self_contributions(energy_key, train_structures, all_species):
