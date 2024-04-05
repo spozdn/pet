@@ -74,7 +74,7 @@ class Accumulator:
 
         for index, value_now in enumerate(values_now):
             if isinstance(value_now, torch.Tensor):
-                value_now = value_now.data.cpu().numpy()
+                value_now = value_now.data.cpu().to(torch.float32).numpy()
             self.values[index].append(value_now)
 
     def consist_of_nones(self, el):
@@ -106,8 +106,8 @@ class Logger:
         self.support_missing_values = support_missing_values
 
     def update(self, predictions_now, targets_now):
-        self.predictions.append(predictions_now.data.cpu().numpy())
-        self.targets.append(targets_now.data.cpu().numpy())
+        self.predictions.append(predictions_now.data.cpu().to(torch.float32).numpy())
+        self.targets.append(targets_now.data.cpu().to(torch.float32).numpy())
 
     def flush(self):
         self.predictions = np.concatenate(self.predictions, axis=0)
@@ -332,3 +332,22 @@ def get_quadrature(L):
 
     return matrices, weights
             
+def dtype2string(dtype):
+    if dtype == torch.float32:
+        return "float32"
+    if dtype == torch.float16:
+        return "float16"
+    if dtype == torch.bfloat16:
+        return "bfloat16"
+    
+    raise ValueError("unknown dtype")
+
+def string2dtype(string):
+    if string == "float32":
+        return torch.float32
+    if string == "float16":
+        return torch.float16
+    if string == "bfloat16":
+        return torch.bfloat16
+    
+    raise ValueError("unknown dtype")

@@ -14,6 +14,7 @@ from .pet import PET, PETMLIPWrapper, PETUtilityWrapper
 from .utilities import get_rmse, get_mae, set_reproducibility, Accumulator, report_accuracy
 from .data_preparation import get_pyg_graphs, get_compositional_features
 from .data_preparation import get_targets
+from .utilities import dtype2string, string2dtype
 
 def main():
     parser = argparse.ArgumentParser()
@@ -29,6 +30,7 @@ def main():
     parser.add_argument("--path_save_predictions", help="Path to a folder where to save predictions.", type = str)
     parser.add_argument("--verbose", help="Show more details",
                         action="store_true")
+    parser.add_argument("--dtype", type = str, help = "dtype to be used; one of 'float16', 'bfloat16', 'float32'.")
 
     args = parser.parse_args()
 
@@ -47,6 +49,13 @@ def main():
         USE_AUGMENTATION = True
 
     hypers = load_hypers_from_file(HYPERS_PATH)
+    if args.dtype is None:
+        dtype = string2dtype(hypers.ARCHITECTURAL_HYPERS.DTYPE)
+    else:
+        dtype = string2dtype(args.dtype)
+    torch.set_default_dtype(dtype)
+
+    print(f"using {dtype2string(dtype)} for calculations")
     if hypers.UTILITY_FLAGS.CALCULATION_TYPE not in ['general_target', 'mlip']:
         raise ValueError("unknown calculation type")
     
@@ -86,6 +95,7 @@ def main():
         model = model.to( torch.device('cuda:0'))
 
     model.load_state_dict(torch.load(PATH_TO_MODEL_STATE_DICT))
+    model = model.to(dtype = dtype)
     model.eval()
 
     # warmup for correct time estimation
@@ -167,7 +177,7 @@ def main():
         all_targets_predicted = all_predictions[0]
         GENERAL_TARGET_SETTINGS = hypers.GENERAL_TARGET_SETTINGS
         ground_truth = get_targets(structures, GENERAL_TARGET_SETTINGS)
-        ground_truth = [el.data.cpu().numpy() for el in ground_truth]
+        ground_truth = [el.data.cpu().to(dtype = torch.float32).numpy() for el in ground_truth]
         ground_truth = np.concatenate(ground_truth, axis = 0)
 
         report_accuracy(all_targets_predicted, ground_truth, GENERAL_TARGET_SETTINGS.TARGET_KEY,
