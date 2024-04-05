@@ -78,6 +78,11 @@ def combine_hypers(provided_hypers, default_hypers):
     if result['FITTING_SCHEME']['DO_GRADIENT_CLIPPING']:
         if result['FITTING_SCHEME']['GRADIENT_CLIPPING_MAX_NORM'] is None:
             raise ValueError("gradient clipping max_norm must be provided if do_gradient_clipping == True")
+        
+    if result['FITTING_SCHEME']['BALANCED_DATA_LOADER']:
+        if 'STRUCTURAL_BATCH_SIZE' in result['FITTING_SCHEME'].keys():
+            if result['FITTING_SCHEME']['STRUCTURAL_BATCH_SIZE'] is not None:
+                raise ValueError("if using balanced_data_loader only atomic batch size can be provided")
     return result
 
 def combine_hypers_shallow(provided_hypers, default_hypers,

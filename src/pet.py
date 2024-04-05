@@ -320,10 +320,10 @@ class MessagesPredictor(torch.nn.Module):
     def forward(self, messages: torch.Tensor, mask: torch.Tensor, nums: torch.Tensor,
                  central_species: torch.Tensor, multipliers : torch.Tensor):
         messages_proceed = messages * multipliers[:, :, None]
-      
         messages_proceed[mask] = 0.0
         if self.AVERAGE_POOLING:
-            pooled = messages_proceed.sum(dim = 1) / nums[:, None]
+            total_weight = multipliers.sum(dim = 1)[:, None]
+            pooled = messages_proceed.sum(dim = 1) / total_weight
         else:
             pooled = messages_proceed.sum(dim = 1)
 
@@ -338,14 +338,17 @@ class MessagesBondsPredictor(torch.nn.Module):
         self.AVERAGE_BOND_ENERGIES = hypers.AVERAGE_BOND_ENERGIES
 
     def forward(self, messages: torch.Tensor, mask: torch.Tensor, nums: torch.Tensor,
-                 central_species: torch.Tensor):
+                 central_species: torch.Tensor, multipliers: torch.Tensor):
         predictions = self.head({'pooled' : messages, 
                                      'central_species' : central_species})['atomic_predictions']
         
         mask_expanded = mask[..., None].repeat(1, 1, predictions.shape[2])
         predictions = torch.where(mask_expanded, 0.0, predictions)
+
+        predictions = predictions * multipliers[:, :, None]
         if self.AVERAGE_BOND_ENERGIES:
-            result = predictions.sum(dim = 1) / nums
+            total_weight = multipliers.sum(dim = 1)[:, None]
+            result = predictions.sum(dim = 1) / total_weight
         else:
             result = predictions.sum(dim = 1)
         return result
@@ -451,8 +454,9 @@ class PET(torch.nn.Module):
         nums = batch_dict['nums']
         
         lengths = torch.sqrt(torch.sum(x * x, dim = 2) + 1e-16)
-        multipliers = cutoff_func(lengths, self.R_CUT, self.CUTOFF_DELTA) 
-        
+        multipliers = cutoff_func(lengths, self.R_CUT, self.CUTOFF_DELTA)
+        multipliers[mask] = 0.0
+
         neighbors_index = batch_dict['neighbors_index']
         neighbors_pos = batch_dict['neighbors_pos']
         
@@ -474,7 +478,7 @@ class PET(torch.nn.Module):
                 atomic_predictions = atomic_predictions + messages_predictor(output_messages, mask, nums, central_species, multipliers)
                     
             if self.USE_BOND_ENERGIES:
-                atomic_predictions = atomic_predictions + messages_bonds_predictor(output_messages, mask, nums, central_species)
+                atomic_predictions = atomic_predictions + messages_bonds_predictor(output_messages, mask, nums, central_species, multipliers)
        
         if self.TARGET_TYPE == 'structural':
             if self.TARGET_AGGREGATION == 'sum':
@@ -567,3 +571,40 @@ class PETMLIPWrapper(torch.nn.Module):
             result.append(None)
             
         return result
+
+
+class SelfContributionsWrapper(torch.nn.Module):
+    def __init__(self, model, self_contributions):
+        super(SelfContributionsWrapper, self).__init__()
+        self.model = model
+        self.register_buffer('self_contributions', torch.tensor(self_contributions,
+                                                                dtype = torch.get_default_dtype()))
+        if self.model.hypers.TARGET_TYPE == 'structural':
+            self.TARGET_TYPE = "structural"  # for TorchScript
+            if self.model.hypers.TARGET_AGGREGATION == 'mean':
+                raise ValueError("self contributions wrapper is made only for sum aggregation, not for mean")
+        else:
+            self.TARGET_TYPE = "atomic"
+        if self.model.hypers.D_OUTPUT != 1:
+            raise ValueError("self contributions wrapper is made only for D_OUTPUT = 1")
+
+    def forward(self, batch_dict: Dict[str, torch.Tensor]) -> torch.Tensor:
+        predictions = self.model(batch_dict)
+        central_species = batch_dict['central_species']
+        self_contribution_energies = self.self_contributions[central_species][:, None]
+        if self.TARGET_TYPE == 'structural':
+            self_contribution_energies = torch_geometric.nn.global_add_pool(self_contribution_energies,
+                                                  batch=batch_dict['batch'])
+        return predictions + self_contribution_energies
+
+
+class FlagsWrapper(torch.nn.Module):
+    '''For DataParallel'''
+    def __init__(self, model):
+        super(FlagsWrapper, self).__init__()
+        self.model = model
+        self.augmentation = None
+        self.create_graph = None
+
+    def forward(self, batch):
+        return self.model(batch, augmentation = self.augmentation, create_graph = self.create_graph)

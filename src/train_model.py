@@ -20,6 +20,8 @@ from .data_preparation import get_self_contributions, get_corrected_energies
 import argparse
 from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_forces
 from .utilities import dtype2string, string2dtype
+from .pet import FlagsWrapper
+
 
 def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, device, output_dir):
     TIME_SCRIPT_STARTED = time.time()
@@ -92,7 +94,7 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
 
     model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
     if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
-        model = DataParallel(model)
+        model = DataParallel(FlagsWrapper(model))
         model = model.to(torch.device('cuda:0'))
     
     if FITTING_SCHEME.MODEL_TO_START_WITH is not None:
@@ -144,19 +146,46 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
             if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
-            predictions_energies, predictions_forces = model(batch, augmentation = True, create_graph = True)
-            if FITTING_SCHEME.ENERGIES_LOSS == 'per_atom':
-                predictions_energies = predictions_energies / batch.n_atoms
-                ground_truth_energies = batch.y / batch.n_atoms
+            if FITTING_SCHEME.MULTI_GPU:
+                model.module.augmentation = True
+                model.module.create_graph = True
+                predictions_energies, predictions_forces = model(batch)
             else:
-                ground_truth_energies = batch.y
+                predictions_energies, predictions_forces = model(batch, augmentation = True, create_graph = True)
+            
+
+            if FITTING_SCHEME.MULTI_GPU:
+                y_list = [el.y for el in batch]
+                batch_y = torch.tensor(y_list, dtype = torch.get_default_dtype(), device = device)
+                
+                n_atoms_list = [el.n_atoms for el in batch]
+                batch_n_atoms = torch.tensor(n_atoms_list, dtype = torch.get_default_dtype(), device = device)
+                #print('batch_y: ', batch_y.shape)
+                #print('batch_n_atoms: ', batch_n_atoms.shape)
+
+            else:
+                batch_y = batch.y
+                batch_n_atoms = batch.n_atoms
+            
+            if FITTING_SCHEME.ENERGIES_LOSS == 'per_atom':
+                predictions_energies = predictions_energies / batch_n_atoms
+                ground_truth_energies = batch_y / batch_n_atoms
+            else:
+                ground_truth_energies = batch_y
 
             if MLIP_SETTINGS.USE_ENERGIES:
                 energies_logger.train_logger.update(predictions_energies, ground_truth_energies)
                 loss_energies = get_loss(predictions_energies, ground_truth_energies, FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS)
             if MLIP_SETTINGS.USE_FORCES:
-                forces_logger.train_logger.update(predictions_forces, batch.forces)
-                loss_forces = get_loss(predictions_forces, batch.forces, FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS)
+
+                if FITTING_SCHEME.MULTI_GPU:
+                    forces_list = [el.forces for el in batch]
+                    batch_forces = torch.cat(forces_list, dim = 0).to(device)
+                else:
+                    batch_forces = batch.forces
+                
+                forces_logger.train_logger.update(predictions_forces, batch_forces)
+                loss_forces = get_loss(predictions_forces, batch_forces, FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS)
 
             if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES: 
                 loss = FITTING_SCHEME.ENERGY_WEIGHT * loss_energies / (sliding_energies_rmse ** 2) + loss_forces / (sliding_forces_rmse ** 2)
@@ -178,18 +207,42 @@ def fit_pet(train_structures, val_structures, hypers_dict, name_of_calculation, 
             if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
-            predictions_energies, predictions_forces = model(batch, augmentation = False, create_graph = False)
+            if FITTING_SCHEME.MULTI_GPU:
+                model.module.augmentation = False
+                model.module.create_graph = False
+                predictions_energies, predictions_forces = model(batch)
+            else:
+                predictions_energies, predictions_forces = model(batch, augmentation = False, create_graph = False)
+            
+
+            if FITTING_SCHEME.MULTI_GPU:
+                y_list = [el.y for el in batch]
+                batch_y = torch.tensor(y_list, dtype = torch.get_default_dtype(), device = device)
+                
+                n_atoms_list = [el.n_atoms for el in batch]
+                batch_n_atoms = torch.tensor(n_atoms_list, dtype = torch.get_default_dtype(), device = device)
+
+                #print('batch_y: ', batch_y.shape)
+                #print('batch_n_atoms: ', batch_n_atoms.shape)
+            else:
+                batch_y = batch.y
+                batch_n_atoms = batch.n_atoms
             
             if FITTING_SCHEME.ENERGIES_LOSS == 'per_atom':
-                predictions_energies = predictions_energies / batch.n_atoms
-                ground_truth_energies = batch.y / batch.n_atoms
+                predictions_energies = predictions_energies / batch_n_atoms
+                ground_truth_energies = batch_y / batch_n_atoms
             else:
-                ground_truth_energies = batch.y
+                ground_truth_energies = batch_y
             
             if MLIP_SETTINGS.USE_ENERGIES:
                 energies_logger.val_logger.update(predictions_energies, ground_truth_energies)
             if MLIP_SETTINGS.USE_FORCES:
-                forces_logger.val_logger.update(predictions_forces, batch.forces)
+                if FITTING_SCHEME.MULTI_GPU:
+                    forces_list = [el.forces for el in batch]
+                    batch_forces = torch.cat(forces_list, dim = 0).to(device)
+                else:
+                    batch_forces = batch.forces
+                forces_logger.val_logger.update(predictions_forces, batch_forces)
 
         now = {}
         
