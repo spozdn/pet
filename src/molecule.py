@@ -159,7 +159,7 @@ class Molecule():
             kwargs['k_mask'] = torch.BoolTensor(k_mask)[None]
 
             kwargs['positions'] = torch.tensor(
-                self.atoms.get_positions(), dtype=torch.get_default_dtype()
+                self.atoms.get_positions(), dtype=torch.get_default_dtype())
             kwargs['volume'] = torch.tensor(self.volume, dtype = torch.get_default_dtype())
 
 
