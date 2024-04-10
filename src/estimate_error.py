@@ -15,6 +15,7 @@ from .utilities import get_rmse, get_mae, set_reproducibility, Accumulator, repo
 from .data_preparation import get_pyg_graphs, get_compositional_features
 from .data_preparation import get_targets
 from .utilities import dtype2string, string2dtype
+from .pet import FlagsWrapper
 
 def main():
     parser = argparse.ArgumentParser()
@@ -91,7 +92,7 @@ def main():
                             hypers.MLIP_SETTINGS.USE_FORCES)
 
     if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
-        model = DataParallel(model)
+        model = DataParallel(FlagsWrapper(model))
         model = model.to( torch.device('cuda:0'))
 
     model.load_state_dict(torch.load(PATH_TO_MODEL_STATE_DICT))
@@ -103,7 +104,12 @@ def main():
         if not FITTING_SCHEME.MULTI_GPU:
             batch.to(device)
         if hypers.UTILITY_FLAGS.CALCULATION_TYPE == 'mlip':
-            _ = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
+            if FITTING_SCHEME.MULTI_GPU:
+                model.module.augmentation = USE_AUGMENTATION
+                model.module.create_graph = False
+                _ = model(batch)
+            else:
+                _ = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
         else:
             _ = model(batch, augmentation = USE_AUGMENTATION)
         break
@@ -118,7 +124,12 @@ def main():
                 batch.to(device)
 
             if hypers.UTILITY_FLAGS.CALCULATION_TYPE == 'mlip':
-                predictions_batch = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
+                if FITTING_SCHEME.MULTI_GPU:
+                    model.module.augmentation = USE_AUGMENTATION
+                    model.module.create_graph = False
+                    predictions_batch = model(batch)
+                else:
+                    predictions_batch = model(batch, augmentation = USE_AUGMENTATION, create_graph = False)
             else:
                 predictions_batch = model(batch, augmentation = USE_AUGMENTATION)
             
@@ -164,11 +175,11 @@ def main():
                             support_missing_values=FITTING_SCHEME.SUPPORT_MISSING_VALUES)
             
         if args.path_save_predictions is not None:
-            energies_predicted_mean = np.mean(all_energies_predicted, axis = 0)
-            forces_predicted_mean = np.mean(all_forces_predicted, axis = 0)
             if MLIP_SETTINGS.USE_ENERGIES:
+                energies_predicted_mean = np.mean(all_energies_predicted, axis = 0)
                 np.save(args.path_save_predictions + '/energies_predicted.npy', energies_predicted_mean)
             if MLIP_SETTINGS.USE_FORCES:
+                forces_predicted_mean = np.mean(all_forces_predicted, axis = 0)
                 np.save(args.path_save_predictions + '/forces_predicted.npy', forces_predicted_mean)
             
     if hypers.UTILITY_FLAGS.CALCULATION_TYPE == 'general_target':
