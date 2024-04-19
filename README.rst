@@ -30,7 +30,7 @@ Ecosystem
    :align: center
 
 
-"`LAMMPS <https://www.lammps.org/#gsc.tab=0>`_, `i-pi <https://ipi-code.org/i-pi/>`_, and `ASE.MD <https://wiki.fysik.dtu.dk/ase/ase/md.html>`_ are molecular simulation engines.
+`LAMMPS <https://www.lammps.org/#gsc.tab=0>`_, `i-pi <https://ipi-code.org/i-pi/>`_, and `ASE.MD <https://wiki.fysik.dtu.dk/ase/ase/md.html>`_ are molecular simulation engines.
 
 `MTM <https://github.com/lab-cosmo/metatensor-models>`_ enables the creation of a single interface for models such as PET to use them immediately in multiple simulation engines. Currently, this is implemented for LAMMPS and ASE.MD, with plans to extend it to additional engines in the future.
 
