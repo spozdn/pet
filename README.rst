@@ -29,15 +29,15 @@ Ecosystem
    :alt: Ecosystem overview
    :align: center
 
-`LAMMPS <https://www.lammps.org/#gsc.tab=0>`_, `i-pi <https://ipi-code.org/i-pi/>`_, and `ASE.MD <https://wiki.fysik.dtu.dk/ase/ase/md.html>`_ are molecular simulation engines.
- `MTM <https://github.com/lab-cosmo/metatensor-models>`_ allows to make an interface for models such as PET once and use them immediately in multiple simulation engines. (LAMMPS and ASE.MD are currently implemented, but a few others are planned in the future).
 
- All MD interfaces are currently under development and are not stable. :bash:`pet_train` and :bash:`pet_run` scripts are semistable now. 
+"`LAMMPS <https://www.lammps.org/#gsc.tab=0>`_, `i-pi <https://ipi-code.org/i-pi/>`_, and `ASE.MD <https://wiki.fysik.dtu.dk/ase/ase/md.html>`_ are molecular simulation engines.
+`MTM <https://github.com/lab-cosmo/metatensor-models>`_ enables the creation of a single interface for models such as PET to use them immediately in multiple simulation engines. Currently, this is implemented for LAMMPS and ASE.MD, with plans to extend it to additional engines in the future.
 
-"sp" = Symmetrization Protocol, refers to ECSE. 
+All MD interfaces are currently under development and are not stable. The :bash:`pet_train` and :bash:`pet_run` scripts are now semi-stable.
 
-MLIP stands for Machine Learning Interatomic Potential. Fitting is supported on energies and/or forces (it is recommended to always use forces). 
-:bash:`pet_train_general_target` is intended for fitting multidimensional targets such as eDOS. Optionally, a target might be atomic, which means it is given for each atom in the structure, not for the whole atomic configuration. Derivatives are not supported for this script.
+"sp" stands for Symmetrization Protocol and refers to ECSE.
+
+MLIP stands for Machine Learning Interatomic Potential. Fitting is supported for both energies and/or forces, although it is recommended to always use forces. The :bash:`pet_train_general_target` script is designed for fitting multidimensional targets such as eDOS. Optionally, a target may be atomic, meaning it is assigned to each atom in the structure rather than the entire atomic configuration. Derivatives are not supported by this script.
 
 +++++++++++++
 Documentation
