@@ -38,7 +38,7 @@ All MD interfaces are currently under development and are not stable. The :bash:
 
 "sp" stands for Symmetrization Protocol and refers to ECSE.
 
-MLIP stands for Machine Learning Interatomic Potential. Fitting is supported for both energies and/or forces, although it is recommended to always use forces. The :bash:`pet_train_general_target` script is designed for fitting multidimensional targets such as eDOS. Optionally, a target may be atomic, meaning it is assigned to each atom in the structure rather than the entire atomic configuration. Derivatives are not supported by this script.
+MLIP stands for Machine Learning Interatomic Potential. Fitting is supported for both energies and/or forces (It is always recommended to use forces if they are available). The :bash:`pet_train_general_target` script is designed for fitting multidimensional targets such as eDOS. Optionally, a target may be atomic, meaning it is assigned to each atom in the structure rather than the entire atomic configuration. Derivatives are not supported by this script.
 
 +++++++++++++
 Documentation
