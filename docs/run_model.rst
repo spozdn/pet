@@ -10,13 +10,14 @@ After the installation, the command line script :bash:`pet_run` is available, an
 
 where the positional arguments are:
 
-#. structures_path: Path to an xyz file with structures
-#. path_to_calc_folder : Path to a folder with a model to use
-#. checkpoint: checkpoint
-#. n_aug: A number of rotational augmentations to use. 
+#. `structures_path`: Path to an xyz file with structures
+#. `path_to_calc_folder` : Path to a folder with a model to use
+#. `checkpoint`: checkpoint filename header. 
+   The full checkpoint filename will be `path_to_calc_folder+checkpoint+_state_dict`
+#. `n_aug`: A number of rotational augmentations to use. 
    It should be a positive integer or -1. 
    If -1, the initial coordinate system will be used, not a single random one, as in the n_aug = 1 case
-#. batch_size: Batch size to use for inference. 
+#. `batch_size`: Batch size to use for inference. 
    It should be a positive integer or -1. 
    If -1, it will be set to the value used for fitting the provided model.
 
