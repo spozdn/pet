@@ -43,6 +43,7 @@ class SingleStructCalculator():
         self.model = model
         self.hypers = hypers
         self.all_species = all_species
+        self.device = device
         
         
     def forward(self, structure):
@@ -52,6 +53,7 @@ class SingleStructCalculator():
         
         graph = molecule.get_graph(molecule.get_max_num(), self.all_species, molecule.get_num_k())
         graph.batch = torch.zeros(graph.num_nodes, dtype = torch.long, device = graph.x.device)
+        graph = graph.to(self.device)
         prediction_energy, prediction_forces = self.model(graph, augmentation = False, create_graph = False)
 
         compositional_features = get_compositional_features([structure], self.all_species)[0]
