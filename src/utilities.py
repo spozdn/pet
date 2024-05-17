@@ -383,10 +383,11 @@ def report_accuracy(
         predictions_std, predictions_mad = get_rotational_discrepancy(all_predictions)
         if verbose:
             print(
-                f"{target_name} rotational discrepancy std (aka rmse) {specification}: {predictions_std} "
-            )
-            print(
                 f"{target_name} rotational discrepancy mad (aka mae) {specification}: {predictions_mad}"
+            )
+
+            print(
+                f"{target_name} rotational discrepancy std (aka rmse) {specification}: {predictions_std} "
             )
 
     if target_type == "structural":
@@ -416,10 +417,10 @@ def report_accuracy(
             )
             if verbose:
                 print(
-                    f"{target_name} rotational discrepancy std (aka rmse) per atom {specification}: {predictions_std_per_atom} "
+                    f"{target_name} rotational discrepancy mad (aka mae) per atom {specification}: {predictions_mad_per_atom}"
                 )
                 print(
-                    f"{target_name} rotational discrepancy mad (aka mae) per atom {specification}: {predictions_mad_per_atom}"
+                    f"{target_name} rotational discrepancy std (aka rmse) per atom {specification}: {predictions_std_per_atom} "
                 )
 
 
