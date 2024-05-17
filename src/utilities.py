@@ -347,9 +347,13 @@ def get_optimizer(model, FITTING_SCHEME):
 def get_rotational_discrepancy(all_predictions):
     predictions_mean = np.mean(all_predictions, axis=0)
     predictions_discrepancies = all_predictions - predictions_mean[np.newaxis]
+    # correction for unbiased estimate
     correction = all_predictions.shape[0] / (all_predictions.shape[0] - 1)
     predictions_std = np.sqrt(np.mean(predictions_discrepancies**2) * correction)
-    return predictions_std
+
+    # biased estimate, kind of a mess with the unbiased one
+    predictions_mad = np.mean(np.abs(predictions_discrepancies))
+    return predictions_std, predictions_mad
 
 
 def report_accuracy(
@@ -376,10 +380,13 @@ def report_accuracy(
     )
 
     if all_predictions.shape[0] > 1:
-        predictions_std = get_rotational_discrepancy(all_predictions)
+        predictions_std, predictions_mad = get_rotational_discrepancy(all_predictions)
         if verbose:
             print(
-                f"{target_name} rotational discrepancy std {specification}: {predictions_std} "
+                f"{target_name} rotational discrepancy std (aka rmse) {specification}: {predictions_std} "
+            )
+            print(
+                f"{target_name} rotational discrepancy mad (aka mae) {specification}: {predictions_mad}"
             )
 
     if target_type == "structural":
@@ -404,12 +411,15 @@ def report_accuracy(
             all_predictions_per_atom = (
                 all_predictions / n_atoms[np.newaxis, :, np.newaxis]
             )
-            predictions_std_per_atom = get_rotational_discrepancy(
-                all_predictions_per_atom
+            predictions_std_per_atom, predictions_mad_per_atom = (
+                get_rotational_discrepancy(all_predictions_per_atom)
             )
             if verbose:
                 print(
-                    f"{target_name} rotational discrepancy std per atom {specification}: {predictions_std_per_atom} "
+                    f"{target_name} rotational discrepancy std (aka rmse) per atom {specification}: {predictions_std_per_atom} "
+                )
+                print(
+                    f"{target_name} rotational discrepancy mad (aka mae) per atom {specification}: {predictions_mad_per_atom}"
                 )
 
 
