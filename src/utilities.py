@@ -9,6 +9,7 @@ import copy
 from scipy.special import roots_legendre
 from scipy.spatial.transform import Rotation as R
 
+
 def get_calc_names(all_completed_calcs, current_name):
     name_to_load = None
     name_of_calculation = current_name
@@ -53,7 +54,7 @@ class ModelKeeper:
     def update(self, model_now, error_now, epoch_now, additional_info=None):
         if (self.best_error is None) or (error_now < self.best_error):
             self.best_error = error_now
-            model_now.to('cpu')
+            model_now.to("cpu")
             self.best_model = copy.deepcopy(model_now)
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             model_now.to(device)
@@ -68,7 +69,7 @@ class Accumulator:
     def update(self, values_now):
         if isinstance(values_now, torch.Tensor):
             values_now = [values_now]
-        
+
         if self.values is None:
             self.values = [[] for _ in range(len(values_now))]
 
@@ -98,7 +99,8 @@ class Accumulator:
                 result.append(np.concatenate(el, axis=0))
         self.values = None
         return result
-    
+
+
 class Logger:
     def __init__(self, support_missing_values):
         self.predictions = []
@@ -114,12 +116,21 @@ class Logger:
         self.targets = np.concatenate(self.targets, axis=0)
 
         output = {}
-        output["rmse"] = get_rmse(self.predictions, self.targets, 
-                                  support_missing_values = self.support_missing_values)
-        output["mae"] = get_mae(self.predictions, self.targets,
-                                 support_missing_values = self.support_missing_values)
-        output["relative rmse"] = get_relative_rmse(self.predictions, self.targets,
-                                                    support_missing_values = self.support_missing_values)
+        output["rmse"] = get_rmse(
+            self.predictions,
+            self.targets,
+            support_missing_values=self.support_missing_values,
+        )
+        output["mae"] = get_mae(
+            self.predictions,
+            self.targets,
+            support_missing_values=self.support_missing_values,
+        )
+        output["relative rmse"] = get_relative_rmse(
+            self.predictions,
+            self.targets,
+            support_missing_values=self.support_missing_values,
+        )
 
         self.predictions = []
         self.targets = []
@@ -149,6 +160,7 @@ def get_rotations(indices, global_aug=False):
     else:
         return rotations
 
+
 def get_shift_agnostic_loss(predictions, targets):
     if predictions.shape[1] < targets.shape[1]:
         smaller = predictions
@@ -160,15 +172,18 @@ def get_shift_agnostic_loss(predictions, targets):
     bigger_unfolded = bigger.unfold(1, smaller.shape[1], 1)
     smaller_expanded = smaller[:, None, :]
     delta = smaller_expanded - bigger_unfolded
-    losses = torch.mean(delta * delta, dim = 2)
-    losses, _ = torch.min(losses, dim = 1)
+    losses = torch.mean(delta * delta, dim=2)
+    losses, _ = torch.min(losses, dim=1)
     result = torch.mean(losses)
     return result
+
 
 def get_loss(predictions, targets, support_missing_values, use_shift_agnostic_loss):
     if use_shift_agnostic_loss:
         if support_missing_values:
-            raise NotImplementedError("shift agnostic loss is not yet supported with missing values")
+            raise NotImplementedError(
+                "shift agnostic loss is not yet supported with missing values"
+            )
         else:
             return get_shift_agnostic_loss(predictions, targets)
     else:
@@ -183,19 +198,19 @@ def get_loss(predictions, targets, support_missing_values, use_shift_agnostic_lo
             return torch.mean(delta * delta)
 
 
-def get_rmse(predictions, targets, support_missing_values = False):
+def get_rmse(predictions, targets, support_missing_values=False):
     if support_missing_values:
         delta = predictions - targets
         mask_nan = np.isnan(targets)
         delta[mask_nan] = 0.0
         mask_not_nan = np.logical_not(mask_nan)
         return np.sqrt(np.sum(delta * delta) / np.sum(mask_not_nan))
-    else:    
+    else:
         delta = predictions - targets
         return np.sqrt(np.mean(delta * delta))
 
 
-def get_mae(predictions, targets, support_missing_values = False):
+def get_mae(predictions, targets, support_missing_values=False):
     if support_missing_values:
         delta = predictions - targets
         mask_nan = np.isnan(targets)
@@ -207,11 +222,11 @@ def get_mae(predictions, targets, support_missing_values = False):
         return np.mean(np.abs(delta))
 
 
-def get_relative_rmse(predictions, targets, support_missing_values = False):
-    rmse = get_rmse(predictions, targets, 
-                    support_missing_values = support_missing_values)
-    return rmse / get_rmse(np.mean(targets), targets,
-                            support_missing_values = support_missing_values)
+def get_relative_rmse(predictions, targets, support_missing_values=False):
+    rmse = get_rmse(predictions, targets, support_missing_values=support_missing_values)
+    return rmse / get_rmse(
+        np.mean(targets), targets, support_missing_values=support_missing_values
+    )
 
 
 def get_scheduler(optim, FITTING_SCHEME):
@@ -219,7 +234,7 @@ def get_scheduler(optim, FITTING_SCHEME):
         if epoch < FITTING_SCHEME.EPOCHS_WARMUP:
             return epoch / FITTING_SCHEME.EPOCHS_WARMUP
         delta = epoch - FITTING_SCHEME.EPOCHS_WARMUP
-        num_blocks = delta // FITTING_SCHEME.SCHEDULER_STEP_SIZE 
+        num_blocks = delta // FITTING_SCHEME.SCHEDULER_STEP_SIZE
         return 0.5 ** (num_blocks)
 
     scheduler = LambdaLR(optim, func_lr_scheduler)
@@ -232,69 +247,142 @@ def load_checkpoint(model, optim, scheduler, checkpoint_path):
     optim.load_state_dict(checkpoint["optim_state_dict"])
     scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
+
 def get_data_loaders(train_graphs, val_graphs, FITTING_SCHEME):
     def seed_worker(worker_id):
         worker_seed = torch.initial_seed() % 2**32
         numpy.random.seed(worker_seed)
         random.seed(worker_seed)
+
     g = torch.Generator()
     g.manual_seed(FITTING_SCHEME.RANDOM_SEED)
 
     if FITTING_SCHEME.BALANCED_DATA_LOADER:
-        train_sampler = DynamicBatchSampler(train_graphs, max_num=FITTING_SCHEME.ATOMIC_BATCH_SIZE, mode="node", shuffle = True)
-        val_sampler = DynamicBatchSampler(val_graphs, max_num=FITTING_SCHEME.ATOMIC_BATCH_SIZE, mode="node", shuffle = False)
+        train_sampler = DynamicBatchSampler(
+            train_graphs,
+            max_num=FITTING_SCHEME.ATOMIC_BATCH_SIZE,
+            mode="node",
+            shuffle=True,
+        )
+        val_sampler = DynamicBatchSampler(
+            val_graphs,
+            max_num=FITTING_SCHEME.ATOMIC_BATCH_SIZE,
+            mode="node",
+            shuffle=False,
+        )
 
         if FITTING_SCHEME.MULTI_GPU:
-            train_loader = DataListLoader(train_graphs, batch_sampler=train_sampler, worker_init_fn=seed_worker, generator=g)
-            val_loader = DataListLoader(val_graphs, batch_sampler=val_sampler, worker_init_fn=seed_worker, generator=g)
+            train_loader = DataListLoader(
+                train_graphs,
+                batch_sampler=train_sampler,
+                worker_init_fn=seed_worker,
+                generator=g,
+            )
+            val_loader = DataListLoader(
+                val_graphs,
+                batch_sampler=val_sampler,
+                worker_init_fn=seed_worker,
+                generator=g,
+            )
         else:
-            train_loader = DataLoader(train_graphs, batch_sampler=train_sampler, worker_init_fn=seed_worker, generator=g)
-            val_loader = DataLoader(val_graphs, batch_sampler=val_sampler, worker_init_fn=seed_worker, generator=g)
+            train_loader = DataLoader(
+                train_graphs,
+                batch_sampler=train_sampler,
+                worker_init_fn=seed_worker,
+                generator=g,
+            )
+            val_loader = DataLoader(
+                val_graphs,
+                batch_sampler=val_sampler,
+                worker_init_fn=seed_worker,
+                generator=g,
+            )
     else:
         if FITTING_SCHEME.MULTI_GPU:
-            train_loader = DataListLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-            val_loader = DataListLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+            train_loader = DataListLoader(
+                train_graphs,
+                batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE,
+                shuffle=True,
+                worker_init_fn=seed_worker,
+                generator=g,
+            )
+            val_loader = DataListLoader(
+                val_graphs,
+                batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE,
+                shuffle=False,
+                worker_init_fn=seed_worker,
+                generator=g,
+            )
         else:
-            train_loader = DataLoader(train_graphs, batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker, generator=g)
-            val_loader = DataLoader(val_graphs, batch_size = FITTING_SCHEME.STRUCTURAL_BATCH_SIZE, shuffle = False, worker_init_fn=seed_worker, generator=g)
+            train_loader = DataLoader(
+                train_graphs,
+                batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE,
+                shuffle=True,
+                worker_init_fn=seed_worker,
+                generator=g,
+            )
+            val_loader = DataLoader(
+                val_graphs,
+                batch_size=FITTING_SCHEME.STRUCTURAL_BATCH_SIZE,
+                shuffle=False,
+                worker_init_fn=seed_worker,
+                generator=g,
+            )
 
     return train_loader, val_loader
 
+
 def get_optimizer(model, FITTING_SCHEME):
     if FITTING_SCHEME.USE_WEIGHT_DECAY:
-        optim = torch.optim.AdamW(model.parameters(), 
-                                lr = FITTING_SCHEME.INITIAL_LR,
-                                weight_decay = FITTING_SCHEME.WEIGHT_DECAY)
+        optim = torch.optim.AdamW(
+            model.parameters(),
+            lr=FITTING_SCHEME.INITIAL_LR,
+            weight_decay=FITTING_SCHEME.WEIGHT_DECAY,
+        )
     else:
-        optim = torch.optim.Adam(model.parameters(), lr = FITTING_SCHEME.INITIAL_LR)
+        optim = torch.optim.Adam(model.parameters(), lr=FITTING_SCHEME.INITIAL_LR)
     return optim
+
 
 def get_rotational_discrepancy(all_predictions):
     predictions_mean = np.mean(all_predictions, axis=0)
     predictions_discrepancies = all_predictions - predictions_mean[np.newaxis]
     correction = all_predictions.shape[0] / (all_predictions.shape[0] - 1)
-    predictions_std = np.sqrt(np.mean(predictions_discrepancies ** 2) * correction)
+    predictions_std = np.sqrt(np.mean(predictions_discrepancies**2) * correction)
     return predictions_std
 
-def report_accuracy(all_predictions, ground_truth, target_name,
-                    verbose, specify_per_component,
-                    target_type, n_atoms = None,
-                    support_missing_values = False):
+
+def report_accuracy(
+    all_predictions,
+    ground_truth,
+    target_name,
+    verbose,
+    specify_per_component,
+    target_type,
+    n_atoms=None,
+    support_missing_values=False,
+):
     predictions_mean = np.mean(all_predictions, axis=0)
 
     if specify_per_component:
         specification = "per component"
     else:
         specification = ""
-    print(f"{target_name} mae {specification}: {get_mae(predictions_mean, ground_truth, support_missing_values = support_missing_values)}")
-    print(f"{target_name} rmse {specification}: {get_rmse(predictions_mean, ground_truth, support_missing_values=support_missing_values)}")
+    print(
+        f"{target_name} mae {specification}: {get_mae(predictions_mean, ground_truth, support_missing_values = support_missing_values)}"
+    )
+    print(
+        f"{target_name} rmse {specification}: {get_rmse(predictions_mean, ground_truth, support_missing_values=support_missing_values)}"
+    )
 
     if all_predictions.shape[0] > 1:
         predictions_std = get_rotational_discrepancy(all_predictions)
         if verbose:
-            print(f"{target_name} rotational discrepancy std {specification}: {predictions_std} ")
+            print(
+                f"{target_name} rotational discrepancy std {specification}: {predictions_std} "
+            )
 
-    if target_type == 'structural':
+    if target_type == "structural":
         if len(predictions_mean.shape) == 1:
             predictions_mean = predictions_mean[:, np.newaxis]
         if len(ground_truth.shape) == 1:
@@ -303,21 +391,31 @@ def report_accuracy(all_predictions, ground_truth, target_name,
         predictions_mean_per_atom = predictions_mean / n_atoms[:, np.newaxis]
         ground_truth_per_atom = ground_truth / n_atoms[:, np.newaxis]
 
-        print(f"{target_name} mae per atom {specification}: {get_mae(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values = support_missing_values)}")
-        print(f"{target_name} rmse per atom {specification}: {get_rmse(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values=support_missing_values)}")
+        print(
+            f"{target_name} mae per atom {specification}: {get_mae(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values = support_missing_values)}"
+        )
+        print(
+            f"{target_name} rmse per atom {specification}: {get_rmse(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values=support_missing_values)}"
+        )
 
         if all_predictions.shape[0] > 1:
             if len(all_predictions.shape) == 2:
                 all_predictions = all_predictions[:, :, np.newaxis]
-            all_predictions_per_atom = all_predictions / n_atoms[np.newaxis, :, np.newaxis]
-            predictions_std_per_atom = get_rotational_discrepancy(all_predictions_per_atom)
+            all_predictions_per_atom = (
+                all_predictions / n_atoms[np.newaxis, :, np.newaxis]
+            )
+            predictions_std_per_atom = get_rotational_discrepancy(
+                all_predictions_per_atom
+            )
             if verbose:
-                print(f"{target_name} rotational discrepancy std per atom {specification}: {predictions_std_per_atom} ")
+                print(
+                    f"{target_name} rotational discrepancy std per atom {specification}: {predictions_std_per_atom} "
+                )
 
 
 class NeverRun(torch.nn.Module):
-    '''Dummy torch module to make torchscript happy.
-    This model should never be run'''
+    """Dummy torch module to make torchscript happy.
+    This model should never be run"""
 
     def __init__(self):
         super(NeverRun, self).__init__()
@@ -337,12 +435,13 @@ def get_quadrature(L):
             for v, weight in zip(all_v, weights_now):
                 weights.append(weight)
                 angles = [theta, v, w]
-                rotation =  R.from_euler('xyz', angles, degrees=False)
+                rotation = R.from_euler("xyz", angles, degrees=False)
                 rotation_matrix = rotation.as_matrix()
                 matrices.append(rotation_matrix)
 
     return matrices, weights
-            
+
+
 def dtype2string(dtype):
     if dtype == torch.float32:
         return "float32"
@@ -350,8 +449,9 @@ def dtype2string(dtype):
         return "float16"
     if dtype == torch.bfloat16:
         return "bfloat16"
-    
+
     raise ValueError("unknown dtype")
+
 
 def string2dtype(string):
     if string == "float32":
@@ -360,5 +460,5 @@ def string2dtype(string):
         return torch.float16
     if string == "bfloat16":
         return torch.bfloat16
-    
+
     raise ValueError("unknown dtype")

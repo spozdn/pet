@@ -6,18 +6,23 @@ from pet.hypers import load_hypers_from_file
 
 
 def test_torch_scriptability():
-    '''Test that the model is scriptable'''
-    hypers = load_hypers_from_file('../default_hypers/default_hypers.yaml')
+    """Test that the model is scriptable"""
+    hypers = load_hypers_from_file("../default_hypers/default_hypers.yaml")
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
     ARCHITECTURAL_HYPERS.D_OUTPUT = 1
-    ARCHITECTURAL_HYPERS.TARGET_TYPE = 'structural'
-    ARCHITECTURAL_HYPERS.TARGET_AGGREGATION = 'sum'
+    ARCHITECTURAL_HYPERS.TARGET_TYPE = "structural"
+    ARCHITECTURAL_HYPERS.TARGET_AGGREGATION = "sum"
 
     boolean_architectural_hypers = [
-    'AVERAGE_POOLING',
-    'ADD_TOKEN_FIRST', 'ADD_TOKEN_SECOND', 'R_EMBEDDING_ACTIVATION',
-    'BLEND_NEIGHBOR_SPECIES', 'AVERAGE_BOND_ENERGIES',
-    'USE_ONLY_LENGTH', 'USE_LENGTH']
+        "AVERAGE_POOLING",
+        "ADD_TOKEN_FIRST",
+        "ADD_TOKEN_SECOND",
+        "R_EMBEDDING_ACTIVATION",
+        "BLEND_NEIGHBOR_SPECIES",
+        "AVERAGE_BOND_ENERGIES",
+        "USE_ONLY_LENGTH",
+        "USE_LENGTH",
+    ]
 
     for key in boolean_architectural_hypers:
         initial_value = ARCHITECTURAL_HYPERS.__dict__[key]
