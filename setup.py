@@ -1,5 +1,5 @@
 from setuptools import setup
-
+from torch.utils.cpp_extension import BuildExtension, CppExtension
 
 with open("requirements.txt") as f:
     requirements = f.read().splitlines()
@@ -18,4 +18,13 @@ setup(
         ],
     },
     install_requires=requirements,
+    ext_modules=[
+        CppExtension(
+            name="neighbors_convert",
+            sources=["src/neighbors_convert.cpp"],
+        ),
+    ],
+    cmdclass={
+        "build_ext": BuildExtension
+    },
 )
