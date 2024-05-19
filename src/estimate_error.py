@@ -185,9 +185,12 @@ def main():
         MLIP_SETTINGS = hypers.MLIP_SETTINGS
         if MLIP_SETTINGS.USE_ENERGIES:
             self_contributions = np.load(SELF_CONTRIBUTIONS_PATH)
-            energies_ground_truth = np.array(
-                [struc.info[MLIP_SETTINGS.ENERGY_KEY] for struc in structures]
-            )
+            if MLIP_SETTINGS.ENERGY_KEY in structures[0].info.keys():
+                energies_ground_truth = np.array(
+                    [struc.info[MLIP_SETTINGS.ENERGY_KEY] for struc in structures]
+                )
+            else:
+                energies_ground_truth = None
 
             compositional_features = get_compositional_features(structures, all_species)
             self_contributions_energies = []
@@ -213,10 +216,13 @@ def main():
             )
 
         if MLIP_SETTINGS.USE_FORCES:
-            forces_ground_truth = [
-                struc.arrays[MLIP_SETTINGS.FORCES_KEY] for struc in structures
-            ]
-            forces_ground_truth = np.concatenate(forces_ground_truth, axis=0)
+            if MLIP_SETTINGS.FORCES_KEY in structures[0].arrays.keys():
+                forces_ground_truth = [
+                    struc.arrays[MLIP_SETTINGS.FORCES_KEY] for struc in structures
+                ]
+                forces_ground_truth = np.concatenate(forces_ground_truth, axis=0)
+            else:
+                forces_ground_truth = None
             report_accuracy(
                 all_forces_predicted,
                 forces_ground_truth,

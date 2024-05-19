@@ -372,12 +372,16 @@ def report_accuracy(
         specification = "per component"
     else:
         specification = ""
-    print(
-        f"{target_name} mae {specification}: {get_mae(predictions_mean, ground_truth, support_missing_values = support_missing_values)}"
-    )
-    print(
-        f"{target_name} rmse {specification}: {get_rmse(predictions_mean, ground_truth, support_missing_values=support_missing_values)}"
-    )
+        
+    if ground_truth is not None:
+        print(
+            f"{target_name} mae {specification}: {get_mae(predictions_mean, ground_truth, support_missing_values = support_missing_values)}"
+        )
+        print(
+            f"{target_name} rmse {specification}: {get_rmse(predictions_mean, ground_truth, support_missing_values=support_missing_values)}"
+        )
+    else:
+        print(f"ground truth target for {target_name} is not provided (or is provided with a wrong key). Thus, it is impossible to estimate the error between predictions and ground truth target")
 
     if all_predictions.shape[0] > 1:
         predictions_std, predictions_mad = get_rotational_discrepancy(all_predictions)
@@ -393,18 +397,21 @@ def report_accuracy(
     if target_type == "structural":
         if len(predictions_mean.shape) == 1:
             predictions_mean = predictions_mean[:, np.newaxis]
-        if len(ground_truth.shape) == 1:
-            ground_truth = ground_truth[:, np.newaxis]
-
         predictions_mean_per_atom = predictions_mean / n_atoms[:, np.newaxis]
-        ground_truth_per_atom = ground_truth / n_atoms[:, np.newaxis]
+        
+        
+        if ground_truth is not None:
+            if len(ground_truth.shape) == 1:
+                ground_truth = ground_truth[:, np.newaxis]
 
-        print(
-            f"{target_name} mae per atom {specification}: {get_mae(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values = support_missing_values)}"
-        )
-        print(
-            f"{target_name} rmse per atom {specification}: {get_rmse(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values=support_missing_values)}"
-        )
+            ground_truth_per_atom = ground_truth / n_atoms[:, np.newaxis]
+
+            print(
+                f"{target_name} mae per atom {specification}: {get_mae(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values = support_missing_values)}"
+            )
+            print(
+                f"{target_name} rmse per atom {specification}: {get_rmse(predictions_mean_per_atom, ground_truth_per_atom, support_missing_values=support_missing_values)}"
+            )
 
         if all_predictions.shape[0] > 1:
             if len(all_predictions.shape) == 2:
