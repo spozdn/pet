@@ -27,6 +27,7 @@ ARCHITECTURAL_HYPERS:
   K_CUT: None # should be float; only used when USE_LONG_RANGE is True
   K_CUT_DELTA: None
   DTYPE: float32 # float32 or float16 or bfloat16
+  RESIDUAL_FACTOR: 0.5
 
 FITTING_SCHEME:  
   INITIAL_LR: 1e-4
