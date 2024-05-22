@@ -171,7 +171,7 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
 
     at::Tensor neighbors_pos = torch::zeros({n_atoms, max_size}, options_int);
     int_t* neighbors_pos_ptr = neighbors_pos.data_ptr<int_t>();
-    fill_neighbors_pos_serial<int_t, float_t>(i_list.size(0), neighbors_pos_ptr, max_size, n_atoms, i_list_ptr, j_list_ptr, S_list_ptr, neighbors_index_ptr, neighbors_shift_ptr, current_index);
+    fill_neighbors_pos_parallel<int_t, float_t>(i_list.size(0), neighbors_pos_ptr, max_size, n_atoms, i_list_ptr, j_list_ptr, S_list_ptr, neighbors_index_ptr, neighbors_shift_ptr, current_index);
     // Clean up temporary memory
     delete[] current_index;
 
