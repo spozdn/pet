@@ -3,7 +3,7 @@ import numpy as np
 from torch_geometric.nn import DataParallel
 
 from .data_preparation import get_compositional_features
-from .molecule import Molecule
+from .molecule import Molecule, MoleculeCPP
 from .hypers import load_hypers_from_file
 from .pet import PET, PETMLIPWrapper, PETUtilityWrapper
 
@@ -52,16 +52,20 @@ class SingleStructCalculator:
         self.device = device
 
     def forward(self, structure):
-        molecule = Molecule(
+        molecule = MoleculeCPP(
             structure,
             self.architectural_hypers.R_CUT,
             self.architectural_hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
             self.architectural_hypers.USE_LONG_RANGE,
             self.architectural_hypers.K_CUT,
         )
+        if self.architectural_hypers.USE_LONG_RANGE:
+            raise NotImplementedError(
+                "Long range interactions are not supported in the SingleStructCalculator"
+            )
 
         graph = molecule.get_graph(
-            molecule.get_max_num(), self.all_species, molecule.get_num_k()
+            molecule.get_max_num(), self.all_species, None
         )
         graph.batch = torch.zeros(
             graph.num_nodes, dtype=torch.long, device=graph.x.device

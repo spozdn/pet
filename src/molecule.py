@@ -3,7 +3,8 @@ import ase.io
 import numpy as np
 from torch_geometric.data import Data
 from .long_range import get_reciprocal, get_all_k, get_volume
-
+import neighbors_convert
+from matscipy.neighbours import neighbour_list as neighbor_list
 
 class Molecule:
     def __init__(
@@ -187,6 +188,74 @@ class Molecule:
 
         return result
 
+
+class MoleculeCPP:
+    def __init__(
+        self, atoms, r_cut, use_additional_scalar_attributes, use_long_range, k_cut
+    ):
+
+        self.use_additional_scalar_attributes = use_additional_scalar_attributes
+        self.atoms = atoms
+        self.r_cut = r_cut
+        self.use_long_range = use_long_range
+        self.k_cut = k_cut
+
+        if self.use_long_range:
+            raise NotImplementedError("Long range is not implemented in cpp")
+        if self.use_additional_scalar_attributes:
+            raise NotImplementedError("Additional scalar attributes are not implemented in cpp")
+        
+        def is_3d_crystal(atoms):
+            pbc = atoms.get_pbc()
+            if isinstance(pbc, bool):
+                return pbc
+            return all(pbc)
+
+        if is_3d_crystal(atoms):
+            i_list, j_list, D_list, S_list = neighbor_list('ijDS', atoms, r_cut)
+        else:
+            i_list, j_list, D_list, S_list = ase.neighborlist.neighbor_list(
+                "ijDS", atoms, r_cut
+            )
+
+        self.i_list = torch.tensor(i_list, dtype=torch.int64).contiguous()
+        self.j_list = torch.tensor(j_list, dtype=torch.int64).contiguous()
+        self.D_list = torch.tensor(D_list, dtype=torch.get_default_dtype()).contiguous()
+        self.S_list = torch.tensor(S_list, dtype=torch.int64).contiguous()
+        self.species = torch.tensor(atoms.get_atomic_numbers(), dtype=torch.int64).contiguous()
+        self.max_num = torch.max(torch.bincount(self.i_list))
+
+    def get_num_k(self):
+        raise NotImplementedError("Long range is not implemented in cpp")
+    
+    def get_max_num(self):
+        return self.max_num
+
+    def get_graph(self, max_num, all_species, max_num_k):
+        n_atoms = len(self.atoms.get_atomic_numbers())
+        all_species = torch.tensor(all_species, dtype=torch.int64).contiguous()
+
+        # torch.ops.my_extension.process(i_list, j_list, S_list, D_list, max_size, n_atoms, species, None)
+        neighbors_index, relative_positions, _, nums, mask, neighbor_species, neighbors_pos = torch.ops.neighbors_convert.process(self.i_list, self.j_list, self.S_list, self.D_list, max_num, n_atoms, self.species, None, all_species)
+
+        mapping = torch.zeros(all_species.max() + 1, dtype=torch.long)
+        mapping[all_species] = torch.arange(all_species.size(0))
+        species_mapped = mapping[self.species]
+
+        kwargs = {
+            "central_species": species_mapped,
+            "x": relative_positions,
+            "neighbor_species": neighbor_species,
+            "neighbors_pos": neighbors_pos,
+            "neighbors_index": neighbors_index.transpose(0, 1),
+            "nums": nums,
+            "mask": mask,
+            "n_atoms": len(self.atoms.positions),
+        }
+
+        result = Data(**kwargs)
+
+        return result
 
 def batch_to_dict(batch):
     batch_dict = {
