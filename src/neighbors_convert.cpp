@@ -2,6 +2,54 @@
 #include <vector>
 #include <algorithm>  // For std::fill
 #include <c10/util/Optional.h>  // For c10::optional
+#include <omp.h>  
+
+template <typename int_t, typename float_t>
+void fill_neighbors_pos_serial(int64_t length, int_t* neighbors_pos_ptr, int64_t max_size, int64_t n_atoms, int_t* i_list_ptr, int_t* j_list_ptr, int_t* S_list_ptr, int_t* neighbors_index_ptr, int_t* neighbors_shift_ptr, int_t* current_index) {
+    // Temporary array to track the current population index
+    int_t* current_index_two = new int_t[n_atoms];
+    std::fill(current_index_two, current_index_two + n_atoms, 0);  // Fill the array with zeros
+   
+    for (int64_t k = 0; k < length; ++k) {
+        int_t i = i_list_ptr[k];
+        int_t j = j_list_ptr[k];
+        for (int64_t q = 0; q < current_index[j]; ++q) {
+            if (neighbors_index_ptr[j * max_size + q] == i && neighbors_shift_ptr[(j * max_size + q) * 3 + 0] == -S_list_ptr[k * 3 + 0] && neighbors_shift_ptr[(j * max_size + q) * 3 + 1] == -S_list_ptr[k * 3 + 1] && neighbors_shift_ptr[(j * max_size + q) * 3 + 2] == -S_list_ptr[k * 3 + 2]) {
+                neighbors_pos_ptr[i * max_size + current_index_two[i]] = q;
+                current_index_two[i]++;
+            }
+        }
+    }
+    delete[] current_index_two;
+}
+
+template <typename int_t, typename float_t>
+void fill_neighbors_pos_parallel(int64_t length, int_t* neighbors_pos_ptr, int64_t max_size, int64_t n_atoms, int_t* i_list_ptr, int_t* j_list_ptr, int_t* S_list_ptr, int_t* neighbors_index_ptr, int_t* neighbors_shift_ptr, int_t* current_index) {
+    int_t* founds = new int_t[length];
+    std::fill(founds, founds + length, -1); // Fill the array with -1
+
+    #pragma omp parallel for
+    for (int64_t k = 0; k < length; ++k) {
+        int_t i = i_list_ptr[k];
+        int_t j = j_list_ptr[k];
+        for (int64_t q = 0; q < current_index[j]; ++q) {
+            if (neighbors_index_ptr[j * max_size + q] == i && neighbors_shift_ptr[(j * max_size + q) * 3 + 0] == -S_list_ptr[k * 3 + 0] && neighbors_shift_ptr[(j * max_size + q) * 3 + 1] == -S_list_ptr[k * 3 + 1] && neighbors_shift_ptr[(j * max_size + q) * 3 + 2] == -S_list_ptr[k * 3 + 2]) {
+                founds[k] = q;
+            }
+        }
+    }
+
+    int_t* current_index_two = new int_t[n_atoms];
+    std::fill(current_index_two, current_index_two + n_atoms, 0);  // Fill the array with zeros
+    for (int64_t k = 0; k < length; ++k) {
+        int_t i = i_list_ptr[k];
+        neighbors_pos_ptr[i * max_size + current_index_two[i]] = founds[k];
+        current_index_two[i]++;
+    }
+    delete[] current_index_two;
+    delete[] founds;
+}
+
 
 // Template function to process the neighbors
 template <typename int_t, typename float_t>
@@ -120,28 +168,12 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
     for (int64_t i = 0; i < n_atoms; ++i) {
         nums_ptr[i] = current_index[i];
     }
-    
+
     at::Tensor neighbors_pos = torch::zeros({n_atoms, max_size}, options_int);
     int_t* neighbors_pos_ptr = neighbors_pos.data_ptr<int_t>();
-
-    // Temporary array to track the current population index
-    int_t* current_index_two = new int_t[n_atoms];
-    std::fill(current_index_two, current_index_two + n_atoms, 0);  // Fill the array with zeros
-   
-    for (int64_t k = 0; k < i_list.size(0); ++k) {
-        int_t i = i_list_ptr[k];
-        int_t j = j_list_ptr[k];
-        for (int64_t q = 0; q < current_index[j]; ++q) {
-            if (neighbors_index_ptr[j * max_size + q] == i && neighbors_shift_ptr[(j * max_size + q) * 3 + 0] == -S_list_ptr[k * 3 + 0] && neighbors_shift_ptr[(j * max_size + q) * 3 + 1] == -S_list_ptr[k * 3 + 1] && neighbors_shift_ptr[(j * max_size + q) * 3 + 2] == -S_list_ptr[k * 3 + 2]) {
-                neighbors_pos_ptr[i * max_size + current_index_two[i]] = q;
-                current_index_two[i]++;
-            }
-        }
-    }
-
+    fill_neighbors_pos_serial<int_t, float_t>(i_list.size(0), neighbors_pos_ptr, max_size, n_atoms, i_list_ptr, j_list_ptr, S_list_ptr, neighbors_index_ptr, neighbors_shift_ptr, current_index);
     // Clean up temporary memory
     delete[] current_index;
-    delete[] current_index_two;
 
     // Return the results as a vector of tensors
     if (scalar_attributes.has_value()) {

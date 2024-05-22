@@ -22,6 +22,8 @@ setup(
         CppExtension(
             name="neighbors_convert",
             sources=["src/neighbors_convert.cpp"],
+            extra_compile_args=['-fopenmp'],  # OpenMP compile flag
+            extra_link_args=['-fopenmp'],     # OpenMP link flag
         ),
     ],
     cmdclass={
