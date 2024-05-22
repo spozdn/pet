@@ -1,8 +1,21 @@
+import sys
 from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CppExtension
 
 with open("requirements.txt") as f:
     requirements = f.read().splitlines()
+
+extra_compile_args = []
+extra_link_args = []
+
+if sys.platform == "darwin":
+    # macOS specific flags for OpenMP
+    extra_compile_args = ['-Xpreprocessor', '-fopenmp']
+    extra_link_args = ['-lomp']
+else:
+    # General flags for other platforms
+    extra_compile_args = ['-fopenmp']
+    extra_link_args = ['-fopenmp']
 
 setup(
     name="pet",
@@ -22,8 +35,8 @@ setup(
         CppExtension(
             name="neighbors_convert",
             sources=["src/neighbors_convert.cpp"],
-            extra_compile_args=['-fopenmp'],  # OpenMP compile flag
-            extra_link_args=['-fopenmp'],     # OpenMP link flag
+            extra_compile_args=extra_compile_args,
+            extra_link_args=extra_link_args,
         ),
     ],
     cmdclass={
