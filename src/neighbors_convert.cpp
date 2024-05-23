@@ -96,14 +96,18 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
     
    
     // Populate the neighbors_index, neighbors_shift, relative_positions, neighbor_species, and neighbor_scalar_attributes tensors
+    
+    int64_t shift_i;
+    int_t i, j, idx;
     for (int64_t k = 0; k < i_list.size(0); ++k) {
-        int_t i = i_list_ptr[k];
-        int_t j = j_list_ptr[k];
-        int_t idx = current_index[i];
-
+        i = i_list_ptr[k];
+        j = j_list_ptr[k];
+        idx = current_index[i];
+        
+        shift_i = i * max_size;
         if (idx < max_size) {
-            neighbors_index_ptr[i * max_size + idx] = j;
-            neighbor_species_ptr[i * max_size + idx] = mapping[species_ptr[j]];
+            neighbors_index_ptr[shift_i + idx] = j;
+            neighbor_species_ptr[shift_i + idx] = mapping[species_ptr[j]];
             /*for (int64_t q = 0; q < all_species_size; ++q) {
                 if (all_species_ptr[q] == species_ptr[j]) {
                     neighbor_species_ptr[i * max_size + idx] = q;
@@ -112,19 +116,19 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
             }*/
             
             // Unroll the loop for better computational efficiency
-            neighbors_shift_ptr[(i * max_size + idx) * 3 + 0] = S_list_ptr[k * 3 + 0];
-            neighbors_shift_ptr[(i * max_size + idx) * 3 + 1] = S_list_ptr[k * 3 + 1];
-            neighbors_shift_ptr[(i * max_size + idx) * 3 + 2] = S_list_ptr[k * 3 + 2];
+            neighbors_shift_ptr[(shift_i + idx) * 3 + 0] = S_list_ptr[k * 3 + 0];
+            neighbors_shift_ptr[(shift_i + idx) * 3 + 1] = S_list_ptr[k * 3 + 1];
+            neighbors_shift_ptr[(shift_i + idx) * 3 + 2] = S_list_ptr[k * 3 + 2];
 
-            relative_positions_ptr[(i * max_size + idx) * 3 + 0] = D_list_ptr[k * 3 + 0];
-            relative_positions_ptr[(i * max_size + idx) * 3 + 1] = D_list_ptr[k * 3 + 1];
-            relative_positions_ptr[(i * max_size + idx) * 3 + 2] = D_list_ptr[k * 3 + 2];
+            relative_positions_ptr[(shift_i + idx) * 3 + 0] = D_list_ptr[k * 3 + 0];
+            relative_positions_ptr[(shift_i + idx) * 3 + 1] = D_list_ptr[k * 3 + 1];
+            relative_positions_ptr[(shift_i + idx) * 3 + 2] = D_list_ptr[k * 3 + 2];
 
-            mask_ptr[i * max_size + idx] = false;
+            mask_ptr[shift_i + idx] = false;
 
             if (scalar_attributes.has_value()) {
                 for (int64_t d = 0; d < scalar_attr_dim; ++d) {
-                    neighbor_scalar_attributes_ptr[(i * max_size + idx) * scalar_attr_dim + d] = scalar_attributes_ptr[k * scalar_attr_dim + d];
+                    neighbor_scalar_attributes_ptr[(shift_i + idx) * scalar_attr_dim + d] = scalar_attributes_ptr[k * scalar_attr_dim + d];
                 }
             }
 
@@ -143,14 +147,17 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
     // Temporary array to track the current population index
     int_t* current_index_two = new int_t[n_atoms];
     std::fill(current_index_two, current_index_two + n_atoms, 0);  // Fill the array with zeros
-   
+    
+    int64_t shift_j;
     for (int64_t k = 0; k < i_list.size(0); ++k) {
-        int_t i = i_list_ptr[k];
-        int_t j = j_list_ptr[k];
+        i = i_list_ptr[k];
+        j = j_list_ptr[k];
+        shift_j = j * max_size;
         for (int64_t q = 0; q < current_index[j]; ++q) {
-            if (neighbors_index_ptr[j * max_size + q] == i && neighbors_shift_ptr[(j * max_size + q) * 3 + 0] == -S_list_ptr[k * 3 + 0] && neighbors_shift_ptr[(j * max_size + q) * 3 + 1] == -S_list_ptr[k * 3 + 1] && neighbors_shift_ptr[(j * max_size + q) * 3 + 2] == -S_list_ptr[k * 3 + 2]) {
+            if (neighbors_index_ptr[shift_j + q] == i && neighbors_shift_ptr[(shift_j + q) * 3 + 0] == -S_list_ptr[k * 3 + 0] && neighbors_shift_ptr[(shift_j + q) * 3 + 1] == -S_list_ptr[k * 3 + 1] && neighbors_shift_ptr[(shift_j + q) * 3 + 2] == -S_list_ptr[k * 3 + 2]) {
                 neighbors_pos_ptr[i * max_size + current_index_two[i]] = q;
                 current_index_two[i]++;
+                break;
             }
         }
     }
