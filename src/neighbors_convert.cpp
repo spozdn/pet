@@ -25,28 +25,37 @@ void fill_neighbors_pos_serial(int64_t length, int_t* neighbors_pos_ptr, int64_t
 
 template <typename int_t, typename float_t>
 void fill_neighbors_pos_parallel(int64_t length, int_t* neighbors_pos_ptr, int64_t max_size, int64_t n_atoms, int_t* i_list_ptr, int_t* j_list_ptr, int_t* S_list_ptr, int_t* neighbors_index_ptr, int_t* neighbors_shift_ptr, int_t* current_index) {
-    int_t* founds = new int_t[length];
+    int64_t* founds = new int64_t[length];
     std::fill(founds, founds + length, -1); // Fill the array with -1
-
-    #pragma omp parallel for
+    
+    int_t i, j;
+    int64_t q;
+    #pragma omp parallel for shared(i_list_ptr, j_list_ptr, S_list_ptr, neighbors_index_ptr, neighbors_shift_ptr, current_index, founds, max_size) private(i, j, q)
     for (int64_t k = 0; k < length; ++k) {
-        int_t i = i_list_ptr[k];
-        int_t j = j_list_ptr[k];
-        for (int64_t q = 0; q < current_index[j]; ++q) {
-            if (neighbors_index_ptr[j * max_size + q] == i && neighbors_shift_ptr[(j * max_size + q) * 3 + 0] == -S_list_ptr[k * 3 + 0] && neighbors_shift_ptr[(j * max_size + q) * 3 + 1] == -S_list_ptr[k * 3 + 1] && neighbors_shift_ptr[(j * max_size + q) * 3 + 2] == -S_list_ptr[k * 3 + 2]) {
+        i = i_list_ptr[k];
+        j = j_list_ptr[k];
+        for (q = 0; q < current_index[j]; ++q) {
+            if (neighbors_index_ptr[j * max_size + q] == i && 
+                neighbors_shift_ptr[(j * max_size + q) * 3 + 0] == -S_list_ptr[k * 3 + 0] && 
+                neighbors_shift_ptr[(j * max_size + q) * 3 + 1] == -S_list_ptr[k * 3 + 1] && 
+                neighbors_shift_ptr[(j * max_size + q) * 3 + 2] == -S_list_ptr[k * 3 + 2]) {
+                
+                #pragma omp atomic write
                 founds[k] = q;
+                
+                break; // Found the match, no need to continue
             }
         }
     }
 
-    int_t* current_index_two = new int_t[n_atoms];
+    /*int_t* current_index_two = new int_t[n_atoms];
     std::fill(current_index_two, current_index_two + n_atoms, 0);  // Fill the array with zeros
     for (int64_t k = 0; k < length; ++k) {
         int_t i = i_list_ptr[k];
         neighbors_pos_ptr[i * max_size + current_index_two[i]] = founds[k];
         current_index_two[i]++;
     }
-    delete[] current_index_two;
+    delete[] current_index_two;*/
     delete[] founds;
 }
 
