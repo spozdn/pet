@@ -102,7 +102,7 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
         int_t idx = current_index[i];
 
         if (idx < max_size) {
-            // neighbors_index_ptr[i * max_size + idx] = j;
+            neighbors_index_ptr[i * max_size + idx] = j;
             neighbor_species_ptr[i * max_size + idx] = mapping[species_ptr[j]];
             /*for (int64_t q = 0; q < all_species_size; ++q) {
                 if (all_species_ptr[q] == species_ptr[j]) {
