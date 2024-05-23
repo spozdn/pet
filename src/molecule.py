@@ -236,11 +236,7 @@ class MoleculeCPP:
         all_species = torch.tensor(all_species, dtype=torch.int64).contiguous()
 
         # torch.ops.my_extension.process(i_list, j_list, S_list, D_list, max_size, n_atoms, species, None)
-        neighbors_index, relative_positions, _, nums, mask, neighbor_species, neighbors_pos = torch.ops.neighbors_convert.process(self.i_list, self.j_list, self.S_list, self.D_list, max_num, n_atoms, self.species, None, all_species)
-
-        mapping = torch.zeros(all_species.max() + 1, dtype=torch.long)
-        mapping[all_species] = torch.arange(all_species.size(0))
-        species_mapped = mapping[self.species]
+        neighbors_index, relative_positions, _, nums, mask, neighbor_species, neighbors_pos, species_mapped = torch.ops.neighbors_convert.process(self.i_list, self.j_list, self.S_list, self.D_list, max_num, n_atoms, self.species, None, all_species)
 
         kwargs = {
             "central_species": species_mapped,

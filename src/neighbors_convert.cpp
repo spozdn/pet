@@ -78,8 +78,23 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
         scalar_attributes_ptr = scalar_attributes->data_ptr<float_t>();
         neighbor_scalar_attributes_ptr = neighbor_scalar_attributes->data_ptr<float_t>();
     }
-
+    
     int64_t all_species_size = all_species.size(0);
+    
+    int_t all_species_maximum = -1;
+    for (int64_t k = 0; k < all_species_size; ++k) {
+        if (all_species_ptr[k] > all_species_maximum) {
+            all_species_maximum = all_species_ptr[k];
+        }
+    }
+    
+    int_t* mapping = new int_t[all_species_maximum + 1];
+    for (int64_t k = 0; k < all_species_size; ++k) {
+        mapping[all_species_ptr[k]] = k;
+    }
+    
+    
+   
     // Populate the neighbors_index, neighbors_shift, relative_positions, neighbor_species, and neighbor_scalar_attributes tensors
     for (int64_t k = 0; k < i_list.size(0); ++k) {
         int_t i = i_list_ptr[k];
@@ -87,13 +102,14 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
         int_t idx = current_index[i];
 
         if (idx < max_size) {
-            neighbors_index_ptr[i * max_size + idx] = j;
-            for (int64_t q = 0; q < all_species_size; ++q) {
+            // neighbors_index_ptr[i * max_size + idx] = j;
+            neighbor_species_ptr[i * max_size + idx] = mapping[species_ptr[j]];
+            /*for (int64_t q = 0; q < all_species_size; ++q) {
                 if (all_species_ptr[q] == species_ptr[j]) {
                     neighbor_species_ptr[i * max_size + idx] = q;
                     break;
                 }
-            }
+            }*/
             
             // Unroll the loop for better computational efficiency
             neighbors_shift_ptr[(i * max_size + idx) * 3 + 0] = S_list_ptr[k * 3 + 0];
@@ -142,12 +158,28 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
     // Clean up temporary memory
     delete[] current_index;
     delete[] current_index_two;
-
+    
+    at::Tensor species_mapped = torch::zeros({n_atoms}, options_int);
+    int_t* species_mapped_ptr = species_mapped.data_ptr<int_t>();
+    for (int64_t k = 0; k < n_atoms; ++k) {
+        species_mapped_ptr[k] = mapping[species_ptr[k]];
+    }
+    
+    /*for (int64_t k = 0; k < n_atoms; ++k) {
+         for (int64_t q = 0; q < all_species_size; ++q) {
+            if (all_species_ptr[q] == species_ptr[k]) {
+                species_mapped_ptr[k] = q;
+                break;
+            }
+        }
+    }*/
+    
+     delete[] mapping;
     // Return the results as a vector of tensors
     if (scalar_attributes.has_value()) {
-        return {neighbors_index, relative_positions, neighbor_scalar_attributes, nums, mask, neighbor_species, neighbors_pos};
+        return {neighbors_index, relative_positions, neighbor_scalar_attributes, nums, mask, neighbor_species, neighbors_pos, species_mapped};
     } else {
-        return {neighbors_index, relative_positions, c10::nullopt, nums, mask, neighbor_species, neighbors_pos};
+        return {neighbors_index, relative_positions, c10::nullopt, nums, mask, neighbor_species, neighbors_pos, species_mapped};
     }
 }
 
