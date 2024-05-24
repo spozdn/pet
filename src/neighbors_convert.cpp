@@ -5,7 +5,7 @@
 
 // Template function to process the neighbors
 template <typename int_t, typename float_t>
-std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
+std::vector<c10::optional<at::Tensor>> process_neighbors_cpu(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
                                                         int64_t max_size, int64_t n_atoms, at::Tensor species,
                                                         c10::optional<at::Tensor> scalar_attributes,
                                                         at::Tensor all_species) {
@@ -188,6 +188,48 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
     } else {
         return {neighbors_index, relative_positions, c10::nullopt, nums, mask, neighbor_species, neighbors_pos, species_mapped};
     }
+}
+
+
+template <typename int_t, typename float_t>
+std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
+                                                        int64_t max_size, int64_t n_atoms, at::Tensor species,
+                                                        c10::optional<at::Tensor> scalar_attributes,
+                                                        at::Tensor all_species) {
+    // Ensure all tensors are on the same device
+    auto device = i_list.device();
+    TORCH_CHECK(j_list.device() == device, "j_list must be on the same device as i_list");
+    TORCH_CHECK(S_list.device() == device, "S_list must be on the same device as i_list");
+    TORCH_CHECK(D_list.device() == device, "D_list must be on the same device as i_list");
+    TORCH_CHECK(species.device() == device, "species must be on the same device as i_list");
+    TORCH_CHECK(all_species.device() == device, "all_species must be on the same device as i_list");
+    if (scalar_attributes.has_value()) {
+        TORCH_CHECK(scalar_attributes.value().device() == device, "scalar_attributes must be on the same device as i_list");
+    }
+
+    // Move all tensors to CPU
+    auto i_list_cpu = i_list.cpu();
+    auto j_list_cpu = j_list.cpu();
+    auto S_list_cpu = S_list.cpu();
+    auto D_list_cpu = D_list.cpu();
+    auto species_cpu = species.cpu();
+    auto all_species_cpu = all_species.cpu();
+    c10::optional<at::Tensor> scalar_attributes_cpu = c10::nullopt;
+    if (scalar_attributes.has_value()) {
+        scalar_attributes_cpu = scalar_attributes.value().cpu();
+    }
+
+    // Invoke the CPU version of the function
+    auto result = process_neighbors_cpu<int_t, float_t>(i_list_cpu, j_list_cpu, S_list_cpu, D_list_cpu, max_size, n_atoms, species_cpu, scalar_attributes_cpu, all_species_cpu);
+
+    // Move the output tensors back to the initial device
+    for (auto& tensor_opt : result) {
+        if (tensor_opt.has_value()) {
+            tensor_opt = tensor_opt.value().to(device);
+        }
+    }
+
+    return result;
 }
 
 // Dispatch function based on tensor types
