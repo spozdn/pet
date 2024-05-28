@@ -10,7 +10,7 @@ class ProcessNeighborsFunction(Function):
         ctx.save_for_backward(i_list)
         ctx.max_size = max_size
         ctx.n_atoms = n_atoms
-        return outputs
+        return tuple(outputs)
 
     @staticmethod
     def backward(ctx, *grad_outputs):

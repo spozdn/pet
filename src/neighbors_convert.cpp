@@ -202,7 +202,7 @@ at::Tensor process_neighbors_cpu_backward(at::Tensor grad_output, at::Tensor i_l
 
     // Initialize gradient tensor for D_list with zeros
     auto options_float = torch::TensorOptions().dtype(grad_output.dtype()).device(torch::kCPU);
-    at::Tensor grad_D_list = torch::zeros({n_atoms, max_size, 3}, options_float);
+    at::Tensor grad_D_list = torch::zeros({i_list.size(0), 3}, options_float);
 
     int_t* current_index = new int_t[n_atoms];
     std::fill(current_index, current_index + n_atoms, 0);  // Fill the array with zeros
@@ -215,9 +215,9 @@ at::Tensor process_neighbors_cpu_backward(at::Tensor grad_output, at::Tensor i_l
     for (int64_t k = 0; k < i_list.size(0); ++k) {
         i = i_list_ptr[k];
         idx = current_index[i];
-        grad_D_list_ptr[(i * max_size + idx) * 3 + 0] = grad_output_ptr[k * 3 + 0];
-        grad_D_list_ptr[(i * max_size + idx) * 3 + 1] = grad_output_ptr[k * 3 + 1];
-        grad_D_list_ptr[(i * max_size + idx) * 3 + 2] = grad_output_ptr[k * 3 + 2];
+        grad_D_list_ptr[k * 3 + 0] = grad_output_ptr[(i * max_size + idx) * 3 + 0];
+        grad_D_list_ptr[k * 3 + 1] = grad_output_ptr[(i * max_size + idx) * 3 + 1];
+        grad_D_list_ptr[k * 3 + 2] = grad_output_ptr[(i * max_size + idx) * 3 + 2];
         current_index[i]++;
     }
 
