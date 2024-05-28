@@ -190,6 +190,72 @@ std::vector<c10::optional<at::Tensor>> process_neighbors_cpu(at::Tensor i_list, 
     }
 }
 
+// Template function for backward pass
+template <typename int_t, typename float_t>
+at::Tensor process_neighbors_cpu_backward(at::Tensor grad_output, at::Tensor i_list, int64_t max_size, int64_t n_atoms) {
+    // Ensure the tensors are on the CPU and are contiguous
+    TORCH_CHECK(grad_output.device().is_cpu(), "grad_output must be on CPU");
+    TORCH_CHECK(i_list.device().is_cpu(), "i_list must be on CPU");
+
+    TORCH_CHECK(grad_output.is_contiguous(), "grad_output must be contiguous");
+    TORCH_CHECK(i_list.is_contiguous(), "i_list must be contiguous");
+
+    // Initialize gradient tensor for D_list with zeros
+    auto options_float = torch::TensorOptions().dtype(grad_output.dtype()).device(torch::kCPU);
+    at::Tensor grad_D_list = torch::zeros({n_atoms, max_size, 3}, options_float);
+
+    int_t* current_index = new int_t[n_atoms];
+    std::fill(current_index, current_index + n_atoms, 0);  // Fill the array with zeros
+
+    float_t* grad_D_list_ptr = grad_D_list.data_ptr<float_t>();
+    float_t* grad_output_ptr = grad_output.data_ptr<float_t>();
+    int_t* i_list_ptr = i_list.data_ptr<int_t>();
+    int_t i, idx;
+
+    for (int64_t k = 0; k < i_list.size(0); ++k) {
+        i = i_list_ptr[k];
+        idx = current_index[i];
+        grad_D_list_ptr[(i * max_size + idx) * 3 + 0] = grad_output_ptr[k * 3 + 0];
+        grad_D_list_ptr[(i * max_size + idx) * 3 + 1] = grad_output_ptr[k * 3 + 1];
+        grad_D_list_ptr[(i * max_size + idx) * 3 + 2] = grad_output_ptr[k * 3 + 2];
+        current_index[i]++;
+    }
+
+    delete[] current_index;
+    return grad_D_list;
+}
+
+template <typename int_t, typename float_t>
+at::Tensor process_neighbors_backward(at::Tensor grad_output, at::Tensor i_list, int64_t max_size, int64_t n_atoms) {
+    // Ensure all tensors are on the same device
+    auto device = grad_output.device();
+    TORCH_CHECK(i_list.device() == device, "i_list must be on the same device as grad_output");
+
+    // Move all tensors to CPU
+    auto grad_output_cpu = grad_output.cpu();
+    auto i_list_cpu = i_list.cpu();
+
+    // Invoke the CPU version of the function
+    auto grad_D_list_cpu = process_neighbors_cpu_backward<int_t, float_t>(grad_output_cpu, i_list_cpu, max_size, n_atoms);
+
+    // Move the gradient tensor back to the initial device
+    return grad_D_list_cpu.to(device);
+}
+
+// Dispatch function based on tensor types for backward
+at::Tensor process_dispatch_backward(at::Tensor grad_output, at::Tensor i_list, int64_t max_size, int64_t n_atoms) {
+    if (i_list.scalar_type() == at::ScalarType::Int && grad_output.scalar_type() == at::ScalarType::Float) {
+        return process_neighbors_backward<int32_t, float>(grad_output, i_list, max_size, n_atoms);
+    } else if (i_list.scalar_type() == at::ScalarType::Int && grad_output.scalar_type() == at::ScalarType::Double) {
+        return process_neighbors_backward<int32_t, double>(grad_output, i_list, max_size, n_atoms);
+    } else if (i_list.scalar_type() == at::ScalarType::Long && grad_output.scalar_type() == at::ScalarType::Float) {
+        return process_neighbors_backward<int64_t, float>(grad_output, i_list, max_size, n_atoms);
+    } else if (i_list.scalar_type() == at::ScalarType::Long && grad_output.scalar_type() == at::ScalarType::Double) {
+        return process_neighbors_backward<int64_t, double>(grad_output, i_list, max_size, n_atoms);
+    } else {
+        throw std::runtime_error("Unsupported tensor types");
+    }
+}
 
 template <typename int_t, typename float_t>
 std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
@@ -253,9 +319,12 @@ std::vector<c10::optional<at::Tensor>> process_dispatch(at::Tensor i_list, at::T
     }
 }
 
-// Register the function as a JIT operator
-static auto registry = torch::RegisterOperators("neighbors_convert::process", &process_dispatch);
+// Register the functions as JIT operators
+static auto registry = torch::RegisterOperators()
+    .op("neighbors_convert::process", &process_dispatch)
+    .op("neighbors_convert::process_backward", &process_dispatch_backward);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("process", &process_dispatch, "Process neighbors and return tensors, including optional scalar attributes, count tensor, mask, and neighbor_species");
+    m.def("process_backward", &process_dispatch_backward, "Backward pass for process neighbors to compute gradients w.r.t D_list");
 }
