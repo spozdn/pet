@@ -2,12 +2,13 @@
 #include <vector>
 #include <algorithm>  // For std::fill
 #include <c10/util/Optional.h>  // For c10::optional
+#include <torch/script.h>
+#include <optional>
 
 // Template function to process the neighbors
 template <typename int_t, typename float_t>
-std::vector<c10::optional<at::Tensor>> process_neighbors_cpu(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
+std::vector<at::Tensor> process_neighbors_cpu(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
                                                         int64_t max_size, int64_t n_atoms, at::Tensor species,
-                                                        c10::optional<at::Tensor> scalar_attributes,
                                                         at::Tensor all_species) {
     // Ensure the tensors are on the CPU and are contiguous
     TORCH_CHECK(i_list.device().is_cpu(), "i_list must be on CPU");
@@ -41,17 +42,7 @@ std::vector<c10::optional<at::Tensor>> process_neighbors_cpu(at::Tensor i_list, 
     at::Tensor mask = torch::ones({n_atoms, max_size}, options_bool);  // Tensor to store the mask
     at::Tensor neighbor_species = all_species.size(0) * torch::ones({n_atoms, max_size}, options_int);
 
-    c10::optional<at::Tensor> neighbor_scalar_attributes;
     int64_t scalar_attr_dim = 0;
-
-    if (scalar_attributes.has_value()) {
-        TORCH_CHECK(scalar_attributes->device().is_cpu(), "scalar_attributes must be on CPU");
-        TORCH_CHECK(scalar_attributes->is_contiguous(), "scalar_attributes must be contiguous");
-        TORCH_CHECK(scalar_attributes->size(0) == D_list.size(0), "scalar_attributes must have the same size as D_list in the first dimension");
-        
-        scalar_attr_dim = scalar_attributes->size(1);
-        neighbor_scalar_attributes = torch::zeros({n_atoms, max_size, scalar_attr_dim}, options_float);
-    }
 
     // Temporary array to track the current population index
     int_t* current_index = new int_t[n_atoms];
@@ -71,13 +62,6 @@ std::vector<c10::optional<at::Tensor>> process_neighbors_cpu(at::Tensor i_list, 
     int_t* nums_ptr = nums.data_ptr<int_t>();
     bool* mask_ptr = mask.data_ptr<bool>();
     int_t* neighbor_species_ptr = neighbor_species.data_ptr<int_t>();
-
-    float_t* scalar_attributes_ptr = nullptr;
-    float_t* neighbor_scalar_attributes_ptr = nullptr;
-    if (scalar_attributes.has_value()) {
-        scalar_attributes_ptr = scalar_attributes->data_ptr<float_t>();
-        neighbor_scalar_attributes_ptr = neighbor_scalar_attributes->data_ptr<float_t>();
-    }
     
     int64_t all_species_size = all_species.size(0);
     
@@ -125,12 +109,6 @@ std::vector<c10::optional<at::Tensor>> process_neighbors_cpu(at::Tensor i_list, 
             relative_positions_ptr[(shift_i + idx) * 3 + 2] = D_list_ptr[k * 3 + 2];
 
             mask_ptr[shift_i + idx] = false;
-
-            if (scalar_attributes.has_value()) {
-                for (int64_t d = 0; d < scalar_attr_dim; ++d) {
-                    neighbor_scalar_attributes_ptr[(shift_i + idx) * scalar_attr_dim + d] = scalar_attributes_ptr[k * scalar_attr_dim + d];
-                }
-            }
 
             current_index[i]++;
         }
@@ -182,12 +160,8 @@ std::vector<c10::optional<at::Tensor>> process_neighbors_cpu(at::Tensor i_list, 
     }*/
     
      delete[] mapping;
-    // Return the results as a vector of tensors
-    if (scalar_attributes.has_value()) {
-        return {neighbors_index, relative_positions, neighbor_scalar_attributes, nums, mask, neighbor_species, neighbors_pos, species_mapped};
-    } else {
-        return {neighbors_index, relative_positions, c10::nullopt, nums, mask, neighbor_species, neighbors_pos, species_mapped};
-    }
+    
+     return {neighbors_index, relative_positions, nums, mask, neighbor_species, neighbors_pos, species_mapped};
 }
 
 // Template function for backward pass
@@ -197,8 +171,11 @@ at::Tensor process_neighbors_cpu_backward(at::Tensor grad_output, at::Tensor i_l
     TORCH_CHECK(grad_output.device().is_cpu(), "grad_output must be on CPU");
     TORCH_CHECK(i_list.device().is_cpu(), "i_list must be on CPU");
 
-    TORCH_CHECK(grad_output.is_contiguous(), "grad_output must be contiguous");
-    TORCH_CHECK(i_list.is_contiguous(), "i_list must be contiguous");
+    grad_output = grad_output.contiguous();
+    i_list = i_list.contiguous();
+    
+    // TORCH_CHECK(grad_output.is_contiguous(), "grad_output must be contiguous");
+    // TORCH_CHECK(i_list.is_contiguous(), "i_list must be contiguous");
 
     // Initialize gradient tensor for D_list with zeros
     auto options_float = torch::TensorOptions().dtype(grad_output.dtype()).device(torch::kCPU);
@@ -258,9 +235,8 @@ at::Tensor process_dispatch_backward(at::Tensor grad_output, at::Tensor i_list, 
 }
 
 template <typename int_t, typename float_t>
-std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
+std::vector<at::Tensor> process_neighbors(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
                                                         int64_t max_size, int64_t n_atoms, at::Tensor species,
-                                                        c10::optional<at::Tensor> scalar_attributes,
                                                         at::Tensor all_species) {
     // Ensure all tensors are on the same device
     auto device = i_list.device();
@@ -269,10 +245,7 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
     TORCH_CHECK(D_list.device() == device, "D_list must be on the same device as i_list");
     TORCH_CHECK(species.device() == device, "species must be on the same device as i_list");
     TORCH_CHECK(all_species.device() == device, "all_species must be on the same device as i_list");
-    if (scalar_attributes.has_value()) {
-        TORCH_CHECK(scalar_attributes.value().device() == device, "scalar_attributes must be on the same device as i_list");
-    }
-
+    
     // Move all tensors to CPU
     auto i_list_cpu = i_list.cpu();
     auto j_list_cpu = j_list.cpu();
@@ -280,51 +253,78 @@ std::vector<c10::optional<at::Tensor>> process_neighbors(at::Tensor i_list, at::
     auto D_list_cpu = D_list.cpu();
     auto species_cpu = species.cpu();
     auto all_species_cpu = all_species.cpu();
-    c10::optional<at::Tensor> scalar_attributes_cpu = c10::nullopt;
-    if (scalar_attributes.has_value()) {
-        scalar_attributes_cpu = scalar_attributes.value().cpu();
-    }
 
     // Invoke the CPU version of the function
-    auto result = process_neighbors_cpu<int_t, float_t>(i_list_cpu, j_list_cpu, S_list_cpu, D_list_cpu, max_size, n_atoms, species_cpu, scalar_attributes_cpu, all_species_cpu);
+    auto result = process_neighbors_cpu<int_t, float_t>(i_list_cpu, j_list_cpu, S_list_cpu, D_list_cpu, max_size, n_atoms, species_cpu, all_species_cpu);
 
     // Move the output tensors back to the initial device
     for (auto& tensor_opt : result) {
-        if (tensor_opt.has_value()) {
-            tensor_opt = tensor_opt.value().to(device);
-        }
+        tensor_opt = tensor_opt.to(device);
     }
 
     return result;
 }
 
 // Dispatch function based on tensor types
-std::vector<c10::optional<at::Tensor>> process_dispatch(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
-                                                        int64_t max_size, int64_t n_atoms, at::Tensor species, c10::optional<at::Tensor> scalar_attributes,
+std::vector<at::Tensor> process_dispatch(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
+                                                        int64_t max_size, int64_t n_atoms, at::Tensor species,
                                                         at::Tensor all_species) {
     if (i_list.scalar_type() == at::ScalarType::Int && j_list.scalar_type() == at::ScalarType::Int &&
         S_list.scalar_type() == at::ScalarType::Int && D_list.scalar_type() == at::ScalarType::Float) {
-        return process_neighbors<int32_t, float>(i_list, j_list, S_list, D_list, max_size, n_atoms, species, scalar_attributes, all_species);
+        return process_neighbors<int32_t, float>(i_list, j_list, S_list, D_list, max_size, n_atoms, species, all_species);
     } else if (i_list.scalar_type() == at::ScalarType::Int && j_list.scalar_type() == at::ScalarType::Int &&
                S_list.scalar_type() == at::ScalarType::Int && D_list.scalar_type() == at::ScalarType::Double) {
-        return process_neighbors<int32_t, double>(i_list, j_list, S_list, D_list, max_size, n_atoms, species, scalar_attributes, all_species);
+        return process_neighbors<int32_t, double>(i_list, j_list, S_list, D_list, max_size, n_atoms, species, all_species);
     } else if (i_list.scalar_type() == at::ScalarType::Long && j_list.scalar_type() == at::ScalarType::Long &&
                S_list.scalar_type() == at::ScalarType::Long && D_list.scalar_type() == at::ScalarType::Float) {
-        return process_neighbors<int64_t, float>(i_list, j_list, S_list, D_list, max_size, n_atoms, species, scalar_attributes, all_species);
+        return process_neighbors<int64_t, float>(i_list, j_list, S_list, D_list, max_size, n_atoms, species, all_species);
     } else if (i_list.scalar_type() == at::ScalarType::Long && j_list.scalar_type() == at::ScalarType::Long &&
                S_list.scalar_type() == at::ScalarType::Long && D_list.scalar_type() == at::ScalarType::Double) {
-        return process_neighbors<int64_t, double>(i_list, j_list, S_list, D_list, max_size, n_atoms, species, scalar_attributes, all_species);
+        return process_neighbors<int64_t, double>(i_list, j_list, S_list, D_list, max_size, n_atoms, species, all_species);
     } else {
         throw std::runtime_error("Unsupported tensor types");
     }
 }
 
-// Register the functions as JIT operators
+class ProcessNeighborsFunction : public torch::autograd::Function<ProcessNeighborsFunction> {
+public:
+    static std::vector<at::Tensor> forward(torch::autograd::AutogradContext *ctx, at::Tensor i_list, at::Tensor j_list, 
+                                           at::Tensor S_list, at::Tensor D_list, int64_t max_size, int64_t n_atoms, 
+                                           at::Tensor species, at::Tensor all_species) {
+        auto outputs = process_dispatch(i_list, j_list, S_list, D_list, max_size, n_atoms, species, all_species);
+        ctx->save_for_backward({i_list});
+        ctx->saved_data["max_size"] = max_size;
+        ctx->saved_data["n_atoms"] = n_atoms;
+        return outputs;
+    }
+
+    static std::vector<at::Tensor> backward(torch::autograd::AutogradContext *ctx, std::vector<at::Tensor> grad_outputs) {
+        auto i_list = ctx->get_saved_variables()[0];
+        auto max_size = ctx->saved_data["max_size"].toInt();
+        auto n_atoms = ctx->saved_data["n_atoms"].toInt();
+
+        auto grad_relative_positions = grad_outputs[1];  // Assuming this is the gradient w.r.t relative_positions tensor
+        auto grad_D_list = process_dispatch_backward(grad_relative_positions, i_list, max_size, n_atoms);
+
+        return {at::Tensor(), at::Tensor(), at::Tensor(), grad_D_list, at::Tensor(), at::Tensor(), at::Tensor(), at::Tensor()};
+    }
+};
+
+// Wrapper function to call apply
+std::vector<at::Tensor> process_neighbors_apply(at::Tensor i_list, at::Tensor j_list, at::Tensor S_list, at::Tensor D_list, 
+                                          int64_t max_size, int64_t n_atoms, at::Tensor species, at::Tensor all_species) {
+    return ProcessNeighborsFunction::apply(i_list, j_list, S_list, D_list, max_size, n_atoms, species, all_species);
+}
+
 static auto registry = torch::RegisterOperators()
-    .op("neighbors_convert::process", &process_dispatch)
-    .op("neighbors_convert::process_backward", &process_dispatch_backward);
+    .op("neighbors_convert::process(Tensor i_list, Tensor j_list, Tensor S_list, Tensor D_list, int max_size, int n_atoms, Tensor species, Tensor all_species) -> Tensor[]", &process_neighbors_apply);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("process", &process_dispatch, "Process neighbors and return tensors, including optional scalar attributes, count tensor, mask, and neighbor_species");
-    m.def("process_backward", &process_dispatch_backward, "Backward pass for process neighbors to compute gradients w.r.t D_list");
+    m.def("process_neighbors", &process_neighbors_apply, "Process neighbors and return tensors, including count tensor, mask, and neighbor_species");
+    
+/*static auto registry = torch::RegisterOperators()
+    .op("neighbors_convert::process(Tensor i_list, Tensor j_list, Tensor S_list, Tensor D_list, int max_size, int n_atoms, Tensor species, Tensor all_species) -> Tensor[]", &process_neighbors_apply);
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("process_neighbors(Tensor i_list, Tensor j_list, Tensor S_list, Tensor D_list, int max_size, int n_atoms, Tensor species, Tensor all_species) -> Tensor[]", &process_neighbors_apply, "Process neighbors and return tensors, including count tensor, mask, and neighbor_species");*/
 }
