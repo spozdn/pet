@@ -316,15 +316,31 @@ std::vector<at::Tensor> process_neighbors_apply(at::Tensor i_list, at::Tensor j_
     return ProcessNeighborsFunction::apply(i_list, j_list, S_list, D_list, max_size, n_atoms, species, all_species);
 }
 
-static auto registry = torch::RegisterOperators()
-    .op("neighbors_convert::process(Tensor i_list, Tensor j_list, Tensor S_list, Tensor D_list, int max_size, int n_atoms, Tensor species, Tensor all_species) -> Tensor[]", &process_neighbors_apply);
+/*TORCH_LIBRARY(neighbors_convert, m) {
+    m.def(
+        "convert_neighbors(Tensor i_list, Tensor j_list, Tensor S_list, Tensor D_list, int max_size, int n_atoms, Tensor species, Tensor all_species) -> Tensor[]",
+         &process_neighbors_apply
+    );
+}*/
+
+TORCH_LIBRARY(neighbors_convert, m) {
+    m.def(
+        "process",
+         &process_neighbors_apply
+    );
+}
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("process_neighbors", &process_neighbors_apply, "Process neighbors and return tensors, including count tensor, mask, and neighbor_species");
+    m.def("process_neighbors(Tensor i_list, Tensor j_list, Tensor S_list, Tensor D_list, int max_size, int n_atoms, Tensor species, Tensor all_species) -> Tensor[]", &process_neighbors_apply, "Process neighbors and return tensors, including count tensor, mask, and neighbor_species");
+}
+    
+/*static auto registry = torch::RegisterOperators()
+    .op("neighbors_convert::process(Tensor i_list, Tensor j_list, Tensor S_list, Tensor D_list, int max_size, int n_atoms, Tensor species, Tensor all_species) -> Tensor[]", &process_neighbors_apply);*/
+
+/*PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("process_neighbors", &process_neighbors_apply, "Process neighbors and return tensors, including count tensor, mask, and neighbor_species");*/
     
 /*static auto registry = torch::RegisterOperators()
     .op("neighbors_convert::process(Tensor i_list, Tensor j_list, Tensor S_list, Tensor D_list, int max_size, int n_atoms, Tensor species, Tensor all_species) -> Tensor[]", &process_neighbors_apply);
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("process_neighbors(Tensor i_list, Tensor j_list, Tensor S_list, Tensor D_list, int max_size, int n_atoms, Tensor species, Tensor all_species) -> Tensor[]", &process_neighbors_apply, "Process neighbors and return tensors, including count tensor, mask, and neighbor_species");*/
-}
+*/

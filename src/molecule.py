@@ -3,7 +3,6 @@ import ase.io
 import numpy as np
 from torch_geometric.data import Data
 from .long_range import get_reciprocal, get_all_k, get_volume
-import neighbors_convert
 from matscipy.neighbours import neighbour_list as neighbor_list
 
 class Molecule:
