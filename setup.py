@@ -20,11 +20,15 @@ setup(
     install_requires=requirements,
     ext_modules=[
         CppExtension(
-            name="neighbors_convert",
+            name="pet.neighbors_convert",  # Ensure this matches the package structure
             sources=["src/neighbors_convert.cpp"],
         ),
     ],
     cmdclass={
         "build_ext": BuildExtension.with_options(no_python_abi_suffix=True)
     },
+    package_data={
+        'pet': ['neighbors_convert.so'],  # Ensure the shared object file is included
+    },
+    include_package_data=True,
 )
