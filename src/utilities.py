@@ -473,3 +473,26 @@ def string2dtype(string):
         return torch.bfloat16
 
     raise ValueError("unknown dtype")
+
+def get_quadrature_predictions(batch, model, quadrature_order, dtype):
+    x_initial = batch.x.clone()
+    all_energies, all_forces = [], []
+    rotations, weights = get_quadrature(quadrature_order)
+    for rotation in rotations:
+        rotation = torch.tensor(rotation, device = batch.x.device, dtype = dtype)
+        batch_rotations = rotation[None, :].repeat(batch.num_nodes, 1, 1)
+        batch.x = torch.bmm(x_initial, batch_rotations)
+        prediction_energy, prediction_forces = model(
+            batch, augmentation=False, create_graph=False
+        )
+        all_energies.append(prediction_energy.data.cpu().numpy())
+        all_forces.append(prediction_forces.data.cpu().numpy())
+
+    energy_mean, forces_mean, total_weight = 0.0, 0.0, 0.0
+    for energy, forces, weight in zip(all_energies, all_forces, weights):
+        energy_mean += energy * weight
+        forces_mean += forces * weight
+        total_weight += weight
+    energy_mean /= total_weight
+    forces_mean /= total_weight
+    return energy_mean, forces_mean
