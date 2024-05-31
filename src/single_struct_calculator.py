@@ -6,7 +6,7 @@ from .data_preparation import get_compositional_features
 from .molecule import Molecule, MoleculeCPP
 from .hypers import load_hypers_from_file
 from .pet import PET, PETMLIPWrapper, PETUtilityWrapper
-
+from .utilities import get_quadrature, string2dtype
 
 class SingleStructCalculator:
     def __init__(
@@ -51,7 +51,7 @@ class SingleStructCalculator:
         self.all_species = all_species
         self.device = device
 
-    def forward(self, structure):
+    def forward(self, structure, quadrature_order = None):
         molecule = MoleculeCPP(
             structure,
             self.architectural_hypers.R_CUT,
@@ -71,9 +71,36 @@ class SingleStructCalculator:
             graph.num_nodes, dtype=torch.long, device=graph.x.device
         )
         graph = graph.to(self.device)
-        prediction_energy, prediction_forces = self.model(
-            graph, augmentation=False, create_graph=False
-        )
+        if quadrature_order is None:
+            prediction_energy, prediction_forces = self.model(
+                graph, augmentation=False, create_graph=False
+            )
+            prediction_energy_final = prediction_energy.data.cpu().numpy()
+            prediction_forces_final = prediction_forces.data.cpu().numpy()
+        else:
+            x_initial = graph.x.clone()
+            all_energies, all_forces = [], []
+            rotations, weights = get_quadrature(2)
+            for rotation in rotations:
+                rotation = torch.tensor(rotation, device = self.device, 
+                                        dtype = string2dtype(self.architectural_hypers.DTYPE))
+                batch_rotations = rotation[None, :].repeat(graph.num_nodes, 1, 1)
+                graph.x = torch.bmm(x_initial, batch_rotations)
+                prediction_energy, prediction_forces = self.model(
+                    graph, augmentation=False, create_graph=False
+                )
+                all_energies.append(prediction_energy.data.cpu().numpy())
+                all_forces.append(prediction_forces.data.cpu().numpy())
+
+            energy_mean, forces_mean, total_weight = 0.0, 0.0, 0.0
+            for energy, forces, weight in zip(all_energies, all_forces, weights):
+                energy_mean += energy * weight
+                forces_mean += forces * weight
+                total_weight += weight
+            energy_mean /= total_weight
+            forces_mean /= total_weight
+            prediction_energy_final = energy_mean
+            prediction_forces_final = forces_mean
 
         compositional_features = get_compositional_features(
             [structure], self.all_species
@@ -81,5 +108,5 @@ class SingleStructCalculator:
         self_contributions_energy = np.dot(
             compositional_features, self.self_contributions
         )
-        energy_total = prediction_energy.data.cpu().numpy() + self_contributions_energy
-        return energy_total, prediction_forces.data.cpu().numpy()
+        energy_total = prediction_energy_final + self_contributions_energy
+        return energy_total, prediction_forces_final

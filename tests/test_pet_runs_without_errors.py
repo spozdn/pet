@@ -123,7 +123,9 @@ def test_single_struct_calculator(prepare_model):
     )
     structure = ase.io.read("../example/methane_test.xyz", index=0)
     energy, forces = single_struct_calculator.forward(structure)
+    assert forces.shape == (5, 3), "single_struct_calculator failed"
 
+    energy, forces = single_struct_calculator.forward(structure, quadrature_order = 2)
     assert forces.shape == (5, 3), "single_struct_calculator failed"
 
 
