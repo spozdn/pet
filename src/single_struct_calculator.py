@@ -71,6 +71,7 @@ class SingleStructCalculator:
             graph.num_nodes, dtype=torch.long, device=graph.x.device
         )
         graph = graph.to(self.device)
+
         if quadrature_order is None:
             prediction_energy, prediction_forces = self.model(
                 graph, augmentation=False, create_graph=False
@@ -80,7 +81,7 @@ class SingleStructCalculator:
         else:
             x_initial = graph.x.clone()
             all_energies, all_forces = [], []
-            rotations, weights = get_quadrature(2)
+            rotations, weights = get_quadrature(quadrature_order)
             for rotation in rotations:
                 rotation = torch.tensor(rotation, device = self.device, 
                                         dtype = string2dtype(self.architectural_hypers.DTYPE))
