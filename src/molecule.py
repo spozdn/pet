@@ -222,7 +222,10 @@ class MoleculeCPP:
         self.D_list = torch.tensor(D_list, dtype=torch.get_default_dtype()).contiguous()
         self.S_list = torch.tensor(S_list, dtype=torch.int64).contiguous()
         self.species = torch.tensor(atoms.get_atomic_numbers(), dtype=torch.int64).contiguous()
-        self.max_num = torch.max(torch.bincount(self.i_list))
+        if len(self.i_list) == 0:
+            self.max_num = 0
+        else:
+            self.max_num = torch.max(torch.bincount(self.i_list))
 
     def get_num_k(self):
         raise NotImplementedError("Long range is not implemented in cpp")
