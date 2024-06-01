@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import numpy as np
 import torch_geometric
 from torch import nn
@@ -8,7 +9,49 @@ from .transformer import TransformerLayer, Transformer
 from .molecule import batch_to_dict
 from .utilities import get_rotations, NeverRun
 
-
+class NeuralField(nn.Module):
+    def __init__(self, d_input, d_output, sigma, is_optimizable):
+        super(NeuralField, self).__init__()
+        
+        assert d_output % 2 == 0, "d_output must be even"
+        self.d_output = d_output
+        self.sigma = sigma
+        self.is_optimizable = is_optimizable
+        
+        # Initialize the random matrix B
+        B = torch.randn(d_output // 2, d_input) * sigma
+        
+        if is_optimizable:
+            self.B = nn.Parameter(B)  # B will be optimized
+        else:
+            self.B = B  # B will not be optimized
+            self.register_buffer('B_const', B)
+        self.d_input = d_input
+        
+    def forward(self, x):
+        # x shape is [*, 3], where * represents any number of batch dimensions
+        if not self.is_optimizable:
+            B = self.B_const
+        else:
+            B = self.B
+        
+        original_shape = x.shape
+        x = x.view(-1, self.d_input)  # Flatten batch dimensions to apply matrix multiplication
+        
+        x_transformed = x @ B.T  # Shape [*, d_output // 2] flattened to [batch_size * other_dims, d_output // 2]
+        x_transformed = 2 * torch.pi * x_transformed
+        
+        cos_features = torch.cos(x_transformed)
+        sin_features = torch.sin(x_transformed)
+        
+        # Concatenate along the last dimension
+        output = torch.cat((cos_features, sin_features), dim=-1)
+        
+        # Restore original batch dimensions
+        output = output.view(*original_shape[:-1], self.d_output)
+        
+        return output
+    
 class CentralSplitter(torch.nn.Module):
     def __init__(self):
         super(CentralSplitter, self).__init__()
@@ -119,12 +162,15 @@ class CartesianTransformer(torch.nn.Module):
         if hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES:
             input_dim += hypers.SCALAR_ATTRIBUTES_SIZE
 
-        if hypers.R_EMBEDDING_ACTIVATION:
-            self.r_embedding = nn.Sequential(
-                nn.Linear(input_dim, d_model), get_activation(hypers)
-            )
+        if hypers.USE_NEURAL_FIELD:
+            self.r_embedding = NeuralField(input_dim, d_model, hypers.NEURAL_FIELD_SIGMA, hypers.NEURAL_FIELD_OPTIMIZABLE)
         else:
-            self.r_embedding = nn.Linear(input_dim, d_model)
+            if hypers.R_EMBEDDING_ACTIVATION:
+                self.r_embedding = nn.Sequential(
+                    nn.Linear(input_dim, d_model), get_activation(hypers)
+                )
+            else:
+                self.r_embedding = nn.Linear(input_dim, d_model)
 
         if hypers.BLEND_NEIGHBOR_SPECIES and (not is_first):
             n_merge = 3
