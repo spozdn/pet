@@ -10,7 +10,7 @@ from .utilities import string2dtype, get_quadrature_predictions
 
 class SingleStructCalculator:
     def __init__(
-        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu"
+        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None
     ):
         hypers_path = path_to_calc_folder + "/hypers_used.yaml"
         path_to_model_state_dict = (
@@ -51,7 +51,12 @@ class SingleStructCalculator:
         self.all_species = all_species
         self.device = device
 
-    def forward(self, structure, quadrature_order = None):
+        if quadrature_order is not None:
+            self.quadrature_order = int(quadrature_order)
+        else:
+            self.quadrature_order = None
+
+    def forward(self, structure):
         molecule = MoleculeCPP(
             structure,
             self.architectural_hypers.R_CUT,
@@ -72,7 +77,7 @@ class SingleStructCalculator:
         )
         graph = graph.to(self.device)
         
-        if quadrature_order is None:
+        if self.quadrature_order is None:
             prediction_energy, prediction_forces = self.model(
                 graph, augmentation=False, create_graph=False
             )
@@ -80,7 +85,7 @@ class SingleStructCalculator:
             prediction_forces_final = prediction_forces.data.cpu().numpy()
         else:
             prediction_energy_final, prediction_forces_final = get_quadrature_predictions(
-                graph, self.model, quadrature_order, string2dtype(self.architectural_hypers.DTYPE)
+                graph, self.model, self.quadrature_order, string2dtype(self.architectural_hypers.DTYPE)
             )
 
         compositional_features = get_compositional_features(
