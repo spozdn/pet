@@ -96,5 +96,8 @@ class SingleStructCalculator:
         self_contributions_energy = np.dot(
             compositional_features, self.self_contributions
         )
-        energy_total = prediction_energy_final + self_contributions_energy
+
+        # MC self_contributions_energy can be yuge and fuck up precision in well single precision
+        # taking it out for now, probably we should add an option
+        energy_total = prediction_energy_final # + self_contributions_energy
         return energy_total, prediction_forces_final
