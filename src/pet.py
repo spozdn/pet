@@ -10,16 +10,16 @@ from .molecule import batch_to_dict
 from .utilities import get_rotations, NeverRun
 
 class NeuralField(nn.Module):
-    def __init__(self, d_input, d_output, sigma, is_optimizable):
+    def __init__(self, d_input, n_features, d_output, sigma, is_optimizable):
         super(NeuralField, self).__init__()
         
-        assert d_output % 2 == 0, "d_output must be even"
+        
         self.d_output = d_output
         self.sigma = sigma
         self.is_optimizable = is_optimizable
         
         # Initialize the random matrix B
-        B = torch.randn(d_output // 2, d_input) * sigma
+        B = torch.randn(n_features, d_input) * sigma
         
         if is_optimizable:
             self.B = nn.Parameter(B)  # B will be optimized
@@ -27,6 +27,8 @@ class NeuralField(nn.Module):
             self.B = B  # B will not be optimized
             self.register_buffer('B_const', B)
         self.d_input = d_input
+        self.n_features = n_features
+        self.linear = nn.Linear(2 * n_features, d_output)
         
     def forward(self, x):
         # x shape is [*, 3], where * represents any number of batch dimensions
@@ -38,7 +40,7 @@ class NeuralField(nn.Module):
         original_shape = x.shape
         x = x.view(-1, self.d_input)  # Flatten batch dimensions to apply matrix multiplication
         
-        x_transformed = x @ B.T  # Shape [*, d_output // 2] flattened to [batch_size * other_dims, d_output // 2]
+        x_transformed = x @ B.T  # Shape [*, n_features] flattened to [batch_size * other_dims, n_features]
         x_transformed = 2 * torch.pi * x_transformed
         
         cos_features = torch.cos(x_transformed)
@@ -48,8 +50,8 @@ class NeuralField(nn.Module):
         output = torch.cat((cos_features, sin_features), dim=-1)
         
         # Restore original batch dimensions
-        output = output.view(*original_shape[:-1], self.d_output)
-        
+        output = output.view(*original_shape[:-1], 2 * self.n_features)
+        output = self.linear(output)
         return output
     
 class CentralSplitter(torch.nn.Module):
@@ -163,7 +165,7 @@ class CartesianTransformer(torch.nn.Module):
             input_dim += hypers.SCALAR_ATTRIBUTES_SIZE
 
         if hypers.USE_NEURAL_FIELD:
-            self.r_embedding = NeuralField(input_dim, d_model, hypers.NEURAL_FIELD_SIGMA, hypers.NEURAL_FIELD_OPTIMIZABLE)
+            self.r_embedding = NeuralField(input_dim, hypers.NEURAL_FIELD_N_FEATURES, d_model, hypers.NEURAL_FIELD_SIGMA, hypers.NEURAL_FIELD_OPTIMIZABLE)
         else:
             if hypers.R_EMBEDDING_ACTIVATION:
                 self.r_embedding = nn.Sequential(
