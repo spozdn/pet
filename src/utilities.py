@@ -446,7 +446,7 @@ def get_quadrature(L):
             for v, weight in zip(all_v, weights_now):
                 weights.append(weight)
                 angles = [theta, v, w]
-                rotation = R.from_euler("xyz", angles, degrees=False)
+                rotation = R.from_euler("zyz", angles, degrees=False)
                 rotation_matrix = rotation.as_matrix()
                 matrices.append(rotation_matrix)
 
