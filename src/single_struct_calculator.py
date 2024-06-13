@@ -37,7 +37,7 @@ class SingleStructCalculator:
         model = PETMLIPWrapper(
             model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES
         )
-        if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
+        if torch.cuda.is_available() and (torch.cuda.device_count() > 1):
             model = DataParallel(model)
             model = model.to(torch.device("cuda:0"))
 
@@ -76,11 +76,17 @@ class SingleStructCalculator:
             graph.num_nodes, dtype=torch.long, device=graph.x.device
         )
         graph = graph.to(self.device)
-        
+
         if self.quadrature_order is None:
-            prediction_energy, prediction_forces = self.model(
-                graph, augmentation=False, create_graph=False
-            )
+            if torch.cuda.is_available() and (torch.cuda.device_count() > 1):
+                self.model.module.augmentation = False
+                self.model.module.create_graph = False
+                prediction_energy, prediction_forces = self.model([graph])
+            else:
+                prediction_energy, prediction_forces = self.model(
+                    graph, augmentation=False, create_graph=False
+                )
+
             prediction_energy_final = prediction_energy.data.cpu().numpy()
             prediction_forces_final = prediction_forces.data.cpu().numpy()
         else:
