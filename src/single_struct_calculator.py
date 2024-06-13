@@ -8,10 +8,16 @@ from .hypers import load_hypers_from_file
 from .pet import PET, PETMLIPWrapper, PETUtilityWrapper
 from .utilities import string2dtype, get_quadrature_predictions
 
+
 class SingleStructCalculator:
     def __init__(
-        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None
+        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None,
+        use_augmentation=False
     ):
+        if (quadrature_order is not None) and (use_augmentation):
+            raise NotImplementedError("Simultaneous use of a quadrature and augmentation is not yet implemented")
+
+        self.use_augmentation = use_augmentation
         hypers_path = path_to_calc_folder + "/hypers_used.yaml"
         path_to_model_state_dict = (
             path_to_calc_folder + "/" + checkpoint + "_state_dict"
@@ -42,7 +48,8 @@ class SingleStructCalculator:
             model = model.to(torch.device("cuda:0"))
 
         model.load_state_dict(
-            torch.load(path_to_model_state_dict, map_location=torch.device(device))
+            torch.load(path_to_model_state_dict,
+                       map_location=torch.device(device))
         )
         model.eval()
 
@@ -79,19 +86,20 @@ class SingleStructCalculator:
 
         if self.quadrature_order is None:
             if torch.cuda.is_available() and (torch.cuda.device_count() > 1):
-                self.model.module.augmentation = False
+                self.model.module.augmentation = self.use_augmentation
                 self.model.module.create_graph = False
                 prediction_energy, prediction_forces = self.model([graph])
             else:
                 prediction_energy, prediction_forces = self.model(
-                    graph, augmentation=False, create_graph=False
+                    graph, augmentation=self.use_augmentation, create_graph=False
                 )
 
             prediction_energy_final = prediction_energy.data.cpu().numpy()
             prediction_forces_final = prediction_forces.data.cpu().numpy()
         else:
             prediction_energy_final, prediction_forces_final = get_quadrature_predictions(
-                graph, self.model, self.quadrature_order, string2dtype(self.architectural_hypers.DTYPE)
+                graph, self.model, self.quadrature_order, string2dtype(
+                    self.architectural_hypers.DTYPE)
             )
 
         compositional_features = get_compositional_features(
