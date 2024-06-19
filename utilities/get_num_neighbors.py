@@ -18,14 +18,16 @@ def parse_r_cut(value):
             raise argparse.ArgumentTypeError("r_cut must be a single float or a tuple of three floats (start, stop, num)")
 
 def get_n_neighbors(atoms, r_cut):
+    from matscipy.neighbours import neighbour_list as m_neighbor_list
+    from ase.neighborlist import neighbor_list
+    
     def is_3d_crystal(atoms):
         pbc = atoms.get_pbc()
         return pbc if isinstance(pbc, bool) else all(pbc)
 
     if is_3d_crystal(atoms):
-        i_list, j_list = neighbor_list('ij', atoms, r_cut)
+        i_list, j_list = m_neighbor_list('ij', atoms, r_cut)
     else:
-        from ase.neighborlist import neighbor_list
         i_list, j_list = neighbor_list('ij', atoms, r_cut)
     return len(i_list)
 
