@@ -131,7 +131,11 @@ def main():
         load_checkpoint(model, optim, scheduler, f"results/{name_to_load}/checkpoint")
 
     history = []
-    logger = FullLogger(FITTING_SCHEME.SUPPORT_MISSING_VALUES)
+    logger = FullLogger(
+        FITTING_SCHEME.SUPPORT_MISSING_VALUES,
+        FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS,
+        device,
+    )
     mae_model_keeper = ModelKeeper()
     rmse_model_keeper = ModelKeeper()
 
