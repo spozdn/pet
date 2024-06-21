@@ -102,45 +102,101 @@ class Accumulator:
 
 
 class Logger:
-    def __init__(self, support_missing_values):
+    def __init__(self, support_missing_values, use_shift_agnostic_loss, device):
         self.predictions = []
         self.targets = []
         self.support_missing_values = support_missing_values
+        self.use_shift_agnostic_loss = use_shift_agnostic_loss
+        self.device = device
 
     def update(self, predictions_now, targets_now):
-        self.predictions.append(predictions_now.data.cpu().to(torch.float32).numpy())
-        self.targets.append(targets_now.data.cpu().to(torch.float32).numpy())
+        self.predictions.append(predictions_now.data.cpu().numpy())
+        self.targets.append(targets_now.data.cpu().numpy())
 
     def flush(self):
-        self.predictions = np.concatenate(self.predictions, axis=0)
-        self.targets = np.concatenate(self.targets, axis=0)
+        if not self.use_shift_agnostic_loss:
+            self.predictions = np.concatenate(self.predictions, axis=0)
+            self.targets = np.concatenate(self.targets, axis=0)
 
-        output = {}
-        output["rmse"] = get_rmse(
-            self.predictions,
-            self.targets,
-            support_missing_values=self.support_missing_values,
-        )
-        output["mae"] = get_mae(
-            self.predictions,
-            self.targets,
-            support_missing_values=self.support_missing_values,
-        )
-        output["relative rmse"] = get_relative_rmse(
-            self.predictions,
-            self.targets,
-            support_missing_values=self.support_missing_values,
-        )
+            output = {}
+            output["rmse"] = get_rmse(
+                self.predictions,
+                self.targets,
+                support_missing_values=self.support_missing_values,
+            )
+            output["mae"] = get_mae(
+                self.predictions,
+                self.targets,
+                support_missing_values=self.support_missing_values,
+            )
+            output["relative rmse"] = get_relative_rmse(
+                self.predictions,
+                self.targets,
+                support_missing_values=self.support_missing_values,
+            )
 
-        self.predictions = []
-        self.targets = []
-        return output
+            self.predictions = []
+            self.targets = []
+            return output
+        else:
+            if self.support_missing_values:
+                raise ValueError(
+                    "Shift agnostic loss is not supported with missing values"
+                )
+
+            total_mse = 0.0
+            total_mae = 0.0
+            num_samples = 0
+
+            with torch.no_grad():
+                for prediction_batch, target_batch in zip(
+                    self.predictions, self.targets
+                ):
+                    prediction_batch = torch.tensor(
+                        prediction_batch,
+                        device=self.device,
+                        dtype=torch.get_default_dtype(),
+                    )
+                    target_batch = torch.tensor(
+                        target_batch,
+                        device=self.device,
+                        dtype=torch.get_default_dtype(),
+                    )
+                    batch_size = len(target_batch)
+                    current_mse = (
+                        get_shift_agnostic_mse(prediction_batch, target_batch)
+                        * batch_size
+                    )
+                    current_mae = (
+                        get_shift_agnostic_mae(prediction_batch, target_batch)
+                        * batch_size
+                    )
+                    current_mse = float(current_mse)
+                    current_mae = float(current_mae)
+                    total_mse += current_mse
+                    total_mae += current_mae
+                    num_samples += batch_size
+
+            rmse = np.sqrt(total_mse / num_samples)
+            mae = total_mae / num_samples
+
+            output = {}
+            output["rmse"] = rmse
+            output["mae"] = mae
+
+            self.predictions = []
+            self.targets = []
+            return output
 
 
 class FullLogger:
-    def __init__(self, support_missing_values):
-        self.train_logger = Logger(support_missing_values)
-        self.val_logger = Logger(support_missing_values)
+    def __init__(self, support_missing_values, use_shift_agnostic_loss, device):
+        self.train_logger = Logger(
+            support_missing_values, use_shift_agnostic_loss, device
+        )
+        self.val_logger = Logger(
+            support_missing_values, use_shift_agnostic_loss, device
+        )
 
     def flush(self):
         return {"train": self.train_logger.flush(), "val": self.val_logger.flush()}
@@ -161,7 +217,7 @@ def get_rotations(indices, global_aug=False):
         return rotations
 
 
-def get_shift_agnostic_loss(predictions, targets):
+def get_shift_agnostic_mse(predictions, targets):
     if predictions.shape[1] < targets.shape[1]:
         smaller = predictions
         bigger = targets
@@ -178,6 +234,23 @@ def get_shift_agnostic_loss(predictions, targets):
     return result
 
 
+def get_shift_agnostic_mae(predictions, targets):
+    if predictions.shape[1] < targets.shape[1]:
+        smaller = predictions
+        bigger = targets
+    else:
+        smaller = targets
+        bigger = predictions
+
+    bigger_unfolded = bigger.unfold(1, smaller.shape[1], 1)
+    smaller_expanded = smaller[:, None, :]
+    delta = smaller_expanded - bigger_unfolded
+    losses = torch.mean(torch.abs(delta), dim=2)
+    losses, _ = torch.min(losses, dim=1)
+    result = torch.mean(losses)
+    return result
+
+
 def get_loss(predictions, targets, support_missing_values, use_shift_agnostic_loss):
     if use_shift_agnostic_loss:
         if support_missing_values:
@@ -185,7 +258,7 @@ def get_loss(predictions, targets, support_missing_values, use_shift_agnostic_lo
                 "shift agnostic loss is not yet supported with missing values"
             )
         else:
-            return get_shift_agnostic_loss(predictions, targets)
+            return get_shift_agnostic_mse(predictions, targets)
     else:
         if support_missing_values:
             delta = predictions - targets
@@ -372,7 +445,7 @@ def report_accuracy(
         specification = "per component"
     else:
         specification = ""
-        
+
     if ground_truth is not None:
         print(
             f"{target_name} mae {specification}: {get_mae(predictions_mean, ground_truth, support_missing_values = support_missing_values)}"
@@ -381,7 +454,9 @@ def report_accuracy(
             f"{target_name} rmse {specification}: {get_rmse(predictions_mean, ground_truth, support_missing_values=support_missing_values)}"
         )
     else:
-        print(f"ground truth target for {target_name} is not provided (or is provided with a wrong key). Thus, it is impossible to estimate the error between predictions and ground truth target")
+        print(
+            f"ground truth target for {target_name} is not provided (or is provided with a wrong key). Thus, it is impossible to estimate the error between predictions and ground truth target"
+        )
 
     if all_predictions.shape[0] > 1:
         predictions_std, predictions_mad = get_rotational_discrepancy(all_predictions)
@@ -398,8 +473,7 @@ def report_accuracy(
         if len(predictions_mean.shape) == 1:
             predictions_mean = predictions_mean[:, np.newaxis]
         predictions_mean_per_atom = predictions_mean / n_atoms[:, np.newaxis]
-        
-        
+
         if ground_truth is not None:
             if len(ground_truth.shape) == 1:
                 ground_truth = ground_truth[:, np.newaxis]

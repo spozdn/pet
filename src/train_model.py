@@ -142,10 +142,10 @@ def fit_pet(
 
     history = []
     if MLIP_SETTINGS.USE_ENERGIES:
-        energies_logger = FullLogger(FITTING_SCHEME.SUPPORT_MISSING_VALUES)
+        energies_logger = FullLogger(FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS, device)
 
     if MLIP_SETTINGS.USE_FORCES:
-        forces_logger = FullLogger(FITTING_SCHEME.SUPPORT_MISSING_VALUES)
+        forces_logger = FullLogger(FITTING_SCHEME.SUPPORT_MISSING_VALUES, FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS, device)
 
     if MLIP_SETTINGS.USE_FORCES:
         val_forces = torch.cat(val_forces, dim=0)
