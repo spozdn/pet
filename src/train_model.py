@@ -22,6 +22,12 @@ from .data_preparation import get_pyg_graphs, update_pyg_graphs, get_forces
 from .utilities import dtype2string, string2dtype
 from .pet import FlagsWrapper
 
+def save_model(model_name, model_keeper, output_dir, NAME_OF_CALCULATION):
+        torch.save(
+            model_keeper.best_model.state_dict(),
+            f"{output_dir}/{NAME_OF_CALCULATION}/{model_name}_state_dict",
+        )
+
 
 def fit_pet(
     train_structures,
@@ -396,6 +402,31 @@ def fit_pet(
             if elapsed > FITTING_SCHEME.MAX_TIME:
                 break
 
+        if epoch%10==0:  #for now only saving every 10 epochs, saving all models takes around 0.15 s
+
+            if MLIP_SETTINGS.USE_ENERGIES:
+                 if FITTING_SCHEME.ENERGIES_LOSS == "per_structure":
+                     postfix = "per structure"
+                 if FITTING_SCHEME.ENERGIES_LOSS == "per_atom":
+                     postfix = "per atom"
+                 if now[energies_key]["val"]["mae"]<=energies_mae_model_keeper.best_error:
+                     save_model("best_val_mae_energies_model", energies_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
+                 if now[energies_key]["val"]["rmse"]<=energies_rmse_model_keeper.best_error:
+                     save_model("best_val_rmse_energies_model", energies_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
+               
+            if MLIP_SETTINGS.USE_FORCES:
+                 if now["forces"]["val"]["mae"] <= forces_mae_model_keeper.best_error:
+                     save_model("best_val_mae_forces_model", forces_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
+                 if now["forces"]["val"]["rmse"] <=forces_rmse_model_keeper.best_error:
+                     save_model("best_val_rmse_forces_model", forces_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
+    
+            if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES:
+                 if now["forces"]["val"]["mae"] * now[energies_key]["val"]["mae"]<=multiplication_mae_model_keeper.best_error:
+                     save_model("best_val_mae_both_model", multiplication_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
+                 if now["forces"]["val"]["rmse"] * now[energies_key]["val"]["rmse"]<=multiplication_rmse_model_keeper.best_error:
+                     save_model("best_val_rmse_both_model", multiplication_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
+
+
     torch.save(
         {
             "model_state_dict": model.state_dict(),
@@ -408,11 +439,6 @@ def fit_pet(
     with open(f"{output_dir}/{NAME_OF_CALCULATION}/history.pickle", "wb") as f:
         pickle.dump(history, f)
 
-    def save_model(model_name, model_keeper):
-        torch.save(
-            model_keeper.best_model.state_dict(),
-            f"{output_dir}/{NAME_OF_CALCULATION}/{model_name}_state_dict",
-        )
 
     summary = ""
     if MLIP_SETTINGS.USE_ENERGIES:
@@ -420,24 +446,24 @@ def fit_pet(
             postfix = "per structure"
         if FITTING_SCHEME.ENERGIES_LOSS == "per_atom":
             postfix = "per atom"
-        save_model("best_val_mae_energies_model", energies_mae_model_keeper)
+        save_model("best_val_mae_energies_model", energies_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
         summary += f"best val mae in energies {postfix}: {energies_mae_model_keeper.best_error} at epoch {energies_mae_model_keeper.best_epoch}\n"
 
-        save_model("best_val_rmse_energies_model", energies_rmse_model_keeper)
+        save_model("best_val_rmse_energies_model", energies_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
         summary += f"best val rmse in energies {postfix}: {energies_rmse_model_keeper.best_error} at epoch {energies_rmse_model_keeper.best_epoch}\n"
 
     if MLIP_SETTINGS.USE_FORCES:
-        save_model("best_val_mae_forces_model", forces_mae_model_keeper)
+        save_model("best_val_mae_forces_model", forces_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
         summary += f"best val mae in forces: {forces_mae_model_keeper.best_error} at epoch {forces_mae_model_keeper.best_epoch}\n"
 
-        save_model("best_val_rmse_forces_model", forces_rmse_model_keeper)
+        save_model("best_val_rmse_forces_model", forces_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
         summary += f"best val rmse in forces: {forces_rmse_model_keeper.best_error} at epoch {forces_rmse_model_keeper.best_epoch}\n"
 
     if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES:
-        save_model("best_val_mae_both_model", multiplication_mae_model_keeper)
+        save_model("best_val_mae_both_model", multiplication_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
         summary += f"best both (multiplication) mae in energies {postfix}: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n"
 
-        save_model("best_val_rmse_both_model", multiplication_rmse_model_keeper)
+        save_model("best_val_rmse_both_model", multiplication_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
         summary += f"best both (multiplication) rmse in energies {postfix}: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n"
 
     with open(f"{output_dir}/{NAME_OF_CALCULATION}/summary.txt", "w") as f:
@@ -483,6 +509,9 @@ def main():
 
     train_structures = ase.io.read(args.train_structures_path, index=":")
     val_structures = ase.io.read(args.val_structures_path, index=":")
+
+    if len(val_structures)<2:
+        print('Warning - only one structure in the validation set. This leads to errors, increase it!')
 
     hypers = set_hypers_from_files(args.provided_hypers_path, args.default_hypers_path)
 
