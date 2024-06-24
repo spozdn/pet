@@ -43,6 +43,7 @@ def fit_pet(
         os.mkdir(output_dir)
 
     hypers = Hypers(hypers_dict)
+    print('here',hypers_dict)
     dtype = string2dtype(hypers.ARCHITECTURAL_HYPERS.DTYPE)
     torch.set_default_dtype(dtype)
 
@@ -402,7 +403,7 @@ def fit_pet(
             if elapsed > FITTING_SCHEME.MAX_TIME:
                 break
 
-        if epoch%10==0:  #for now only saving every 10 epochs, saving all models takes around 0.15 s
+        if epoch%FITTING_SCHEME.SAVE_EVERY_NTH_EPOCH==0:  #for now only saving every 10 epochs, saving all models takes around 0.15 s
 
             if MLIP_SETTINGS.USE_ENERGIES:
                  if FITTING_SCHEME.ENERGIES_LOSS == "per_structure":
