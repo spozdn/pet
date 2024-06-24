@@ -258,7 +258,14 @@ def main():
             el.data.cpu().to(dtype=torch.float32).numpy() for el in ground_truth
         ]
         ground_truth = np.concatenate(ground_truth, axis=0)
-
+        
+        if args.path_save_predictions is not None:
+            targets_predicted_mean = np.mean(all_targets_predicted, axis=0)
+            np.save(
+                args.path_save_predictions + "/targets_predicted.npy",
+                targets_predicted_mean,
+            )
+            
         report_accuracy(
             all_targets_predicted,
             ground_truth,
@@ -269,13 +276,6 @@ def main():
             n_atoms=n_atoms,
             support_missing_values=FITTING_SCHEME.SUPPORT_MISSING_VALUES,
         )
-
-        if args.path_save_predictions is not None:
-            targets_predicted_mean = np.mean(all_targets_predicted, axis=0)
-            np.save(
-                args.path_save_predictions + "/targets_predicted.npy",
-                targets_predicted_mean,
-            )
 
     if args.verbose:
         print(
