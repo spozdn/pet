@@ -43,7 +43,6 @@ def fit_pet(
         os.mkdir(output_dir)
 
     hypers = Hypers(hypers_dict)
-    print('here',hypers_dict)
     dtype = string2dtype(hypers.ARCHITECTURAL_HYPERS.DTYPE)
     torch.set_default_dtype(dtype)
 
@@ -410,22 +409,35 @@ def fit_pet(
                      postfix = "per structure"
                  if FITTING_SCHEME.ENERGIES_LOSS == "per_atom":
                      postfix = "per atom"
-                 if now[energies_key]["val"]["mae"]<=energies_mae_model_keeper.best_error:
-                     save_model("best_val_mae_energies_model", energies_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
+                 if now[energies_key]["val"]["mae"]<=energies_mae_model_keeper.best_error and not os.path.isfile('{output_dir}/{NAME_OF_CALCULATION}/best_val_mae_energies_model_{energies_mae_model_keeper.best_epoch}_state_dict'):
+                     old_model=os.popen("find . -name 'best_val_mae_energies_model_*'").read()
+                     save_model(f"best_val_mae_energies_model_{energies_mae_model_keeper.best_epoch}", energies_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     print(f'writing best_val_mae_energies_model_{energies_mae_model_keeper.best_epoch} with error {energies_mae_model_keeper.best_error}')
+                     if old_model!='': os.remove(old_model.split('\n')[0])
                  if now[energies_key]["val"]["rmse"]<=energies_rmse_model_keeper.best_error:
-                     save_model("best_val_rmse_energies_model", energies_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     old_model=os.popen("find . -name 'best_val_rmse_energies_model_*'").read()
+                     save_model(f"best_val_rmse_energies_model_{energies_rmse_model_keeper.best_epoch}", energies_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     if old_model!='': os.remove(old_model.split('\n')[0])
                
             if MLIP_SETTINGS.USE_FORCES:
                  if now["forces"]["val"]["mae"] <= forces_mae_model_keeper.best_error:
-                     save_model("best_val_mae_forces_model", forces_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     old_model=os.popen("find . -name 'best_val_mae_forces_model_*'").read()
+                     save_model(f"best_val_mae_forces_model_{forces_mae_model_keeper.best_epoch}", forces_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     if old_model!='': os.remove(old_model.split('\n')[0])
                  if now["forces"]["val"]["rmse"] <=forces_rmse_model_keeper.best_error:
-                     save_model("best_val_rmse_forces_model", forces_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     old_model=os.popen("find . -name 'best_val_rmse_forces_model_*'").read()
+                     save_model(f"best_val_rmse_forces_model_{forces_rmse_model_keeper.best_epoch}", forces_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     if old_model!='': os.remove(old_model.split('\n')[0])
     
             if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES:
                  if now["forces"]["val"]["mae"] * now[energies_key]["val"]["mae"]<=multiplication_mae_model_keeper.best_error:
-                     save_model("best_val_mae_both_model", multiplication_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     old_model=os.popen("find . -name 'best_val_mae_both_model_*'").read()
+                     save_model(f"best_val_mae_both_model_{multiplication_mae_model_keeper.best_epoch}", multiplication_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     if old_model!='': os.remove(old_model.split('\n')[0])
                  if now["forces"]["val"]["rmse"] * now[energies_key]["val"]["rmse"]<=multiplication_rmse_model_keeper.best_error:
-                     save_model("best_val_rmse_both_model", multiplication_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     old_model=os.popen("find . -name 'best_val_rmse_both_model_*'").read()
+                     save_model(f"best_val_rmse_both_model_{multiplication_mae_model_keeper.best_epoch}", multiplication_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
+                     if old_model!='': os.remove(old_model.split('\n')[0])
 
 
     torch.save(
