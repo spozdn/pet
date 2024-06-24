@@ -402,8 +402,6 @@ def fit_pet(
             if elapsed > FITTING_SCHEME.MAX_TIME:
                 break
 
-        print('best e rmse',energies_rmse_model_keeper.best_epoch, energies_rmse_model_keeper.best_error)
-        print(f'{output_dir}/{NAME_OF_CALCULATION}/best_val_rmse_energies_model_{energies_rmse_model_keeper.best_epoch}_state_dict' , os.path.isfile(f'{output_dir}/{NAME_OF_CALCULATION}/best_val_rmse_energies_model_{energies_rmse_model_keeper.best_epoch}_state_dict'))
         if epoch%FITTING_SCHEME.SAVE_EVERY_NTH_EPOCH==0:  #for now only saving every 10 epochs, saving all models takes around 0.15 s
 
             if MLIP_SETTINGS.USE_ENERGIES:
