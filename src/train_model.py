@@ -412,7 +412,6 @@ def fit_pet(
                  if now[energies_key]["val"]["mae"]<=energies_mae_model_keeper.best_error and not os.path.isfile('{output_dir}/{NAME_OF_CALCULATION}/best_val_mae_energies_model_{energies_mae_model_keeper.best_epoch}_state_dict'):
                      old_model=os.popen("find . -name 'best_val_mae_energies_model_*'").read()
                      save_model(f"best_val_mae_energies_model_{energies_mae_model_keeper.best_epoch}", energies_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
-                     print(f'writing best_val_mae_energies_model_{energies_mae_model_keeper.best_epoch} with error {energies_mae_model_keeper.best_error}')
                      if old_model!='': os.remove(old_model.split('\n')[0])
                  if now[energies_key]["val"]["rmse"]<=energies_rmse_model_keeper.best_error:
                      old_model=os.popen("find . -name 'best_val_rmse_energies_model_*'").read()
