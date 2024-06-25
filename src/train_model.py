@@ -459,29 +459,29 @@ def fit_pet(
         if FITTING_SCHEME.ENERGIES_LOSS == "per_atom":
             postfix = "per atom"
         save_model("best_val_mae_energies_model", energies_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
-        os.remove(f'{output_dir}/{NAME_OF_CALCULATION}/best_val_mae_energies_model_*_state_dict')
+        os.system(f'rm {output_dir}/{NAME_OF_CALCULATION}/best_val_mae_energies_model_*_state_dict')
         summary += f"best val mae in energies {postfix}: {energies_mae_model_keeper.best_error} at epoch {energies_mae_model_keeper.best_epoch}\n"
 
         save_model("best_val_rmse_energies_model", energies_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
-        os.remove(f'{output_dir}/{NAME_OF_CALCULATION}/best_val_rmse_energies_model_*_state_dict')
+        os.system(f'rm {output_dir}/{NAME_OF_CALCULATION}/best_val_rmse_energies_model_*_state_dict')
         summary += f"best val rmse in energies {postfix}: {energies_rmse_model_keeper.best_error} at epoch {energies_rmse_model_keeper.best_epoch}\n"
 
     if MLIP_SETTINGS.USE_FORCES:
         save_model("best_val_mae_forces_model", forces_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
-        os.remove(f'{output_dir}/{NAME_OF_CALCULATION}/best_val_mae_forces_model_*_state_dict')
+        os.system(f'rm {output_dir}/{NAME_OF_CALCULATION}/best_val_mae_forces_model_*_state_dict')
         summary += f"best val mae in forces: {forces_mae_model_keeper.best_error} at epoch {forces_mae_model_keeper.best_epoch}\n"
 
         save_model("best_val_rmse_forces_model", forces_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
-        os.remove(f'{output_dir}/{NAME_OF_CALCULATION}/best_val_rmse_forces_model_*_state_dict')
+        os.system(f'rm {output_dir}/{NAME_OF_CALCULATION}/best_val_rmse_forces_model_*_state_dict')
         summary += f"best val rmse in forces: {forces_rmse_model_keeper.best_error} at epoch {forces_rmse_model_keeper.best_epoch}\n"
 
     if MLIP_SETTINGS.USE_ENERGIES and MLIP_SETTINGS.USE_FORCES:
         save_model("best_val_mae_both_model", multiplication_mae_model_keeper, output_dir, NAME_OF_CALCULATION)
-        os.remove(f'{output_dir}/{NAME_OF_CALCULATION}/best_val_mae_both_model_*_state_dict')
+        os.system(f'rm {output_dir}/{NAME_OF_CALCULATION}/best_val_mae_both_model_*_state_dict')
         summary += f"best both (multiplication) mae in energies {postfix}: {multiplication_mae_model_keeper.additional_info[0]} in forces: {multiplication_mae_model_keeper.additional_info[1]} at epoch {multiplication_mae_model_keeper.best_epoch}\n"
 
         save_model("best_val_rmse_both_model", multiplication_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
-        os.remove(f'{output_dir}/{NAME_OF_CALCULATION}/best_val_rmse_both_model_*_state_dict')
+        os.system(f'rm {output_dir}/{NAME_OF_CALCULATION}/best_val_rmse_both_model_*_state_dict')
         summary += f"best both (multiplication) rmse in energies {postfix}: {multiplication_rmse_model_keeper.additional_info[0]} in forces: {multiplication_rmse_model_keeper.additional_info[1]} at epoch {multiplication_rmse_model_keeper.best_epoch}\n"
 
 
