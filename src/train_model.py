@@ -395,8 +395,10 @@ def fit_pet(
             f"lr: {scheduler.get_last_lr()}; " + val_mae_message + train_mae_message
         )
 
+
         history.append(now)
         scheduler.step()
+
         elapsed = time.time() - TIME_SCRIPT_STARTED
         if FITTING_SCHEME.MAX_TIME is not None:
             if elapsed > FITTING_SCHEME.MAX_TIME:
@@ -437,7 +439,6 @@ def fit_pet(
                      old_model=os.popen("find . -name 'best_val_rmse_both_model_*_state_dict'").read()
                      save_model(f"best_val_rmse_both_model_{multiplication_rmse_model_keeper.best_epoch}", multiplication_rmse_model_keeper, output_dir, NAME_OF_CALCULATION)
                      if old_model!='': os.remove(old_model.split('\n')[0])
-
 
     torch.save(
         {
