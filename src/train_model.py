@@ -471,9 +471,15 @@ def main():
     parser.add_argument(
         "name_of_calculation", help="Name of this calculation", type=str
     )
+    parser.add_argument(
+        "--gpu_id", help="ID of the GPU to use", type=int, default=0
+    )
     args = parser.parse_args()
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device(f"cuda:{args.gpu_id}")
+    else:
+        device = torch.device("cpu")
 
     train_structures = ase.io.read(args.train_structures_path, index=":")
     val_structures = ase.io.read(args.val_structures_path, index=":")
