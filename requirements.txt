@@ -1,6 +1,6 @@
 numpy
 scipy
-ase
+ase<3.23.0
 pathos
 jupyter
 scikit-learn
