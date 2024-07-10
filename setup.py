@@ -1,16 +1,3 @@
-import sys
-import subprocess
-import pkg_resources
-
-# Ensure torch is installed
-def install_package(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-try:
-    pkg_resources.get_distribution('torch')
-except pkg_resources.DistributionNotFound:
-    install_package('torch')
-
 from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CppExtension
 
