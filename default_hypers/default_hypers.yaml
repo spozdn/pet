@@ -27,8 +27,10 @@ ARCHITECTURAL_HYPERS:
   K_CUT: None # should be float; only used when USE_LONG_RANGE is True
   K_CUT_DELTA: None
   DTYPE: float32 # float32 or float16 or bfloat16
+  N_TARGETS: 1
+  TARGET_INDEX_KEY: target_index
 
-FITTING_SCHEME:  
+FITTING_SCHEME:
   INITIAL_LR: 1e-4
   EPOCH_NUM_ATOMIC: 1000000000000000000 # structural version is called "EPOCH_NUM"
   SCHEDULER_STEP_SIZE_ATOMIC: 500000000 # structural version is called "SCHEDULER_STEP_SIZE"
@@ -57,7 +59,7 @@ MLIP_SETTINGS: # only used when fitting MLIP
   USE_ENERGIES: True
   USE_FORCES: True
 
-GENERAL_TARGET_SETTINGS: # only used when fitting general target 
+GENERAL_TARGET_SETTINGS: # only used when fitting general target
   TARGET_TYPE: structural
   TARGET_AGGREGATION: sum # sum or mean; only used when TARGET_TYPE is structural
   TARGET_DIM: 42

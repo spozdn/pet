@@ -70,6 +70,8 @@ class SingleStructCalculator:
             self.architectural_hypers.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
             self.architectural_hypers.USE_LONG_RANGE,
             self.architectural_hypers.K_CUT,
+            self.architectural_hypers.N_TARGETS > 1,
+            self.architectural_hypers.TARGET_INDEX_KEY
         )
         if self.architectural_hypers.USE_LONG_RANGE:
             raise NotImplementedError(

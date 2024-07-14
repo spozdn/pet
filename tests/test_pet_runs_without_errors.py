@@ -85,6 +85,29 @@ def test_pet_train(hypers_path):
     assert process.returncode == 0, "pet_train script failed"
 
 
+def test_pet_train_multi_target():
+    """
+    Test the 'pet_train' script for successful execution with multi-target settings.
+
+    This test runs the 'pet_train' script with the multi-target configuration and asserts
+    that it completes successfully (return code 0).
+    """
+    clean()
+
+    script = "pet_train"
+    args = [
+        "methane_multi_target_10.xyz",
+        "methane_multi_target_10.xyz",
+        "hypers_minimal_multi_target.yaml",
+        "../default_hypers/default_hypers.yaml",
+        "test",
+    ]
+
+    process = subprocess.run(
+        [script] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    assert process.returncode == 0, "pet_train script failed for multi-target configuration"
+
 def test_pet_run(prepare_model):
     """
     Test the 'pet_run' script using the model prepared by 'prepare_model'.
@@ -119,13 +142,13 @@ def test_single_struct_calculator(prepare_model):
     """
     model_folder = prepare_model
     single_struct_calculator = SingleStructCalculator(
-        model_folder,
+        model_folder, quadrature_order=2
     )
     structure = ase.io.read("../example/methane_test.xyz", index=0)
     energy, forces = single_struct_calculator.forward(structure)
     assert forces.shape == (5, 3), "single_struct_calculator failed"
 
-    energy, forces = single_struct_calculator.forward(structure, quadrature_order = 2)
+    energy, forces = single_struct_calculator.forward(structure)
     assert forces.shape == (5, 3), "single_struct_calculator failed"
 
 
