@@ -7,8 +7,13 @@ with open("requirements.txt") as f:
 # Collecting include and library paths
 include_dirs = include_paths()
 library_dirs = library_paths()
-library_dirs.append('c10')
-library_dirs.append('torch')
+
+libraries = []
+
+libraries.append('c10')
+libraries.append('torch')
+libraries.append('torch_cpu')
+
 
 # Defining the extension module without specifying the unwanted libraries
 neighbors_convert_extension = Extension(
@@ -16,6 +21,7 @@ neighbors_convert_extension = Extension(
     sources=["src/neighbors_convert.cpp"],
     include_dirs=include_dirs,
     library_dirs=library_dirs,
+    libraries=libraries,
     language='c++',
 )
 
