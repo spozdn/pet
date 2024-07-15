@@ -7,6 +7,8 @@ with open("requirements.txt") as f:
 # Collecting include and library paths
 include_dirs = include_paths()
 library_dirs = library_paths()
+library_dirs.append('c10')
+library_dirs.append('torch')
 
 # Defining the extension module without specifying the unwanted libraries
 neighbors_convert_extension = Extension(
