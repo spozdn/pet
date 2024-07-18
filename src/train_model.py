@@ -142,9 +142,26 @@ def fit_pet(
     scheduler = get_scheduler(optim, FITTING_SCHEME)
 
     if name_to_load is not None:
-        load_checkpoint(
-            model, optim, scheduler, f"{output_dir}/{name_to_load}/checkpoint"
-        )
+        try:
+            load_checkpoint(
+                model, optim, scheduler, f"{output_dir}/{name_to_load}/checkpoint"
+            )
+        except:
+            model_loaded=False
+            for outdir in os.listdir(output_dir)[::-1][1:]:
+                print(f'Not able to load previous checkpoint, trying to load checkpoint {outdir}.')
+                try:
+                    load_checkpoint(
+                        model, optim, scheduler, f"{output_dir}/{outdir}/checkpoint"
+                    )
+                    print(f'Successfully loaded checkpoint {outdir}, continuing training from here.')
+                    model_loaded=True
+                    break
+                except:
+                    pass
+            if not model_loaded:
+                print(f'Not able to load any checkpoint, starting now model training from scratch.')
+              
 
     history = []
     if MLIP_SETTINGS.USE_ENERGIES:
