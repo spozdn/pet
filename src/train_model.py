@@ -65,11 +65,6 @@ def fit_pet(
     structures = train_structures + val_structures
     all_species = get_all_species(structures)
 
-    name_to_load, NAME_OF_CALCULATION = get_calc_names(
-        os.listdir(output_dir), name_of_calculation
-    )
-
-
 
     hypers.UTILITY_FLAGS.CALCULATION_TYPE = "mlip"
 
@@ -139,11 +134,17 @@ def fit_pet(
     optim = get_optimizer(model, FITTING_SCHEME)
     scheduler = get_scheduler(optim, FITTING_SCHEME)
 
-    if name_to_load is not None:
-        try:
+    try:
+        name_to_load, NAME_OF_CALCULATION = get_calc_names(
+            os.listdir(output_dir), name_of_calculation
+        )
+        if name_to_load is not None:
             load_checkpoint(
-                model, optim, scheduler, f"{output_dir}/{name_to_load}/checkpoint"
-            ) 
+                    model, optim, scheduler, f"{output_dir}/{name_to_load}/checkpoint"
+                ) 
+    except:
+        pass
+
 
     history = []
     if MLIP_SETTINGS.USE_ENERGIES:
@@ -403,9 +404,12 @@ def fit_pet(
             if elapsed > FITTING_SCHEME.MAX_TIME:
                 break
 
-        if epoch/FITTING_SCHEME.SAVE_EVERY_NTH_EPOCH==1:  #for now only saving every 10 epochs, saving all models takes around 0.15 s
+        if epoch==FITTING_SCHEME.SAVE_EVERY_NTH_EPOCH:  # Generating the output directory 
             if not os.path.exists(output_dir):
                 os.mkdir(output_dir)
+            name_to_load, NAME_OF_CALCULATION = get_calc_names(
+                os.listdir(output_dir), name_of_calculation
+            )
             os.mkdir(f"{output_dir}/{NAME_OF_CALCULATION}")
             np.save(f"{output_dir}/{NAME_OF_CALCULATION}/all_species.npy", all_species)
             save_hypers(hypers, f"{output_dir}/{NAME_OF_CALCULATION}/hypers_used.yaml")
@@ -414,7 +418,7 @@ def fit_pet(
                     f"{output_dir}/{NAME_OF_CALCULATION}/self_contributions.npy",
                     self_contributions,
                 )
-        if epoch%FITTING_SCHEME.SAVE_EVERY_NTH_EPOCH==0:  #for now only saving every 10 epochs, saving all models takes around 0.15 s
+        if epoch%FITTING_SCHEME.SAVE_EVERY_NTH_EPOCH==0 and epoch>0:  #for now only saving every 10 epochs, saving all models takes around 0.15 s
 
             with open(f"{output_dir}/{NAME_OF_CALCULATION}/history.pickle", "wb") as f:
                 pickle.dump(history, f)
