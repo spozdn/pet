@@ -422,6 +422,17 @@ def fit_pet(
                 break
 
         if epoch%FITTING_SCHEME.SAVE_EVERY_NTH_EPOCH==0:  #for now only saving every 10 epochs, saving all models takes around 0.15 s
+            with open(f"{output_dir}/{NAME_OF_CALCULATION}/history.pickle", "wb") as f:
+                pickle.dump(history, f)
+            torch.save(
+                {
+                    "model_state_dict": model.state_dict(),
+                    "optim_state_dict": optim.state_dict(),
+                    "scheduler_state_dict": scheduler.state_dict(),
+                    "dtype_used": dtype2string(dtype),
+                },
+                f"{output_dir}/{NAME_OF_CALCULATION}/checkpoint",
+            )
 
             if MLIP_SETTINGS.USE_ENERGIES:
                  if FITTING_SCHEME.ENERGIES_LOSS == "per_structure":
