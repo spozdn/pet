@@ -10,7 +10,7 @@ from .utilities import string2dtype, get_quadrature_predictions
 
 class SingleStructCalculator:
     def __init__(
-        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None, inversions=False,
+        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None, inversions=False, add_self_contributions=False,
     ):
         hypers_path = path_to_calc_folder + "/hypers_used.yaml"
         path_to_model_state_dict = (
@@ -57,6 +57,7 @@ class SingleStructCalculator:
             self.quadrature_order = None
 
         self.inversions = inversions
+        self.add_self_contributions = add_self_contributions
 
     def forward(self, structure):
         molecule = MoleculeCPP(
@@ -93,11 +94,13 @@ class SingleStructCalculator:
         compositional_features = get_compositional_features(
             [structure], self.all_species
         )[0]
-        self_contributions_energy = np.dot(
-            compositional_features, self.self_contributions
-        )
 
-        # MC self_contributions_energy can be yuge and fuck up precision in well single precision
-        # taking it out for now, probably we should add an option
-        energy_total = prediction_energy_final # + self_contributions_energy
+        energy_total = prediction_energy_final
+        if self.add_self_contributions:
+            self_contributions_energy = np.dot(
+                compositional_features, self.self_contributions
+            )
+            # note: this may lead to numerical problems in less than double precision
+            energy_total = energy_total + self_contributions_energy
+
         return energy_total, prediction_forces_final
