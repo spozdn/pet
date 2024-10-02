@@ -10,7 +10,7 @@ from .utilities import string2dtype, get_quadrature_predictions
 
 class SingleStructCalculator:
     def __init__(
-        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None, inversions=False, add_self_contributions=False,
+        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None, inversions=False, use_augmentation=False, add_self_contributions=False,
     ):
         hypers_path = path_to_calc_folder + "/hypers_used.yaml"
         path_to_model_state_dict = (
@@ -51,12 +51,16 @@ class SingleStructCalculator:
         self.all_species = all_species
         self.device = device
 
+        if use_augmentation and (quadrature_order is not None or inversions):
+            raise NotImplementedError("Simultaneous use of a quadrature/inversions and augmentation is not yet implemented")
+
         if quadrature_order is not None:
             self.quadrature_order = int(quadrature_order)
         else:
             self.quadrature_order = None
 
         self.inversions = inversions
+        self.use_augmentation = use_augmentation
         self.add_self_contributions = add_self_contributions
 
     def forward(self, structure):
@@ -82,7 +86,7 @@ class SingleStructCalculator:
         
         if self.quadrature_order is None and not self.inversions:
             prediction_energy, prediction_forces = self.model(
-                graph, augmentation=False, create_graph=False
+                graph, augmentation=self.use_augmentation, create_graph=False
             )
             prediction_energy_final = prediction_energy.data.cpu().numpy()
             prediction_forces_final = prediction_forces.data.cpu().numpy()
@@ -91,12 +95,12 @@ class SingleStructCalculator:
                 graph, self.model, self.quadrature_order, self.inversions, string2dtype(self.architectural_hypers.DTYPE)
             )
 
-        compositional_features = get_compositional_features(
-            [structure], self.all_species
-        )[0]
-
         energy_total = prediction_energy_final
+
         if self.add_self_contributions:
+            compositional_features = get_compositional_features(
+                [structure], self.all_species
+            )[0]
             self_contributions_energy = np.dot(
                 compositional_features, self.self_contributions
             )
