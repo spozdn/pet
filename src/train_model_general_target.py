@@ -69,7 +69,10 @@ def main():
 
     val_structures = ase.io.read(args.val_structures_path, index=":")
     structures = train_structures + val_structures
-    all_species = get_all_species(structures)
+    if FITTING_SCHEME.ALL_SPECIES_PATH is not None:
+        all_species = np.load(FITTING_SCHEME.ALL_SPECIES_PATH)
+    else:
+        all_species = get_all_species(structures)
 
     if "results" not in os.listdir("."):
         os.mkdir("results")
