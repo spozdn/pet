@@ -45,6 +45,7 @@ FITTING_SCHEME:
   RANDOM_SEED: 0
   CUDA_DETERMINISTIC: False
   MODEL_TO_START_WITH: None
+  ALL_SPECIES_PATH: None # should be specified if model_to_start_with is not None; path to all_species file
   SUPPORT_MISSING_VALUES: False
   USE_WEIGHT_DECAY: False
   WEIGHT_DECAY: 0.0

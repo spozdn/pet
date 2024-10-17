@@ -59,7 +59,10 @@ def fit_pet(
 
     adapt_hypers(FITTING_SCHEME, train_structures)
     structures = train_structures + val_structures
-    all_species = get_all_species(structures)
+    if FITTING_SCHEME.ALL_SPECIES_PATH is not None:
+        all_species = np.load(FITTING_SCHEME.ALL_SPECIES_PATH)
+    else:
+        all_species = get_all_species(structures)
 
     name_to_load, NAME_OF_CALCULATION = get_calc_names(
         os.listdir(output_dir), name_of_calculation
