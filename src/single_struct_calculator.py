@@ -44,6 +44,10 @@ class SingleStructCalculator:
         model.load_state_dict(
             torch.load(path_to_model_state_dict, map_location=torch.device(device))
         )
+
+        if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
+            model = model.module
+
         model.eval()
 
         self.model = model
@@ -83,7 +87,7 @@ class SingleStructCalculator:
             graph.num_nodes, dtype=torch.long, device=graph.x.device
         )
         graph = graph.to(self.device)
-        
+
         if self.quadrature_order is None and not self.inversions:
             prediction_energy, prediction_forces = self.model(
                 graph, augmentation=self.use_augmentation, create_graph=False
