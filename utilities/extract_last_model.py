@@ -10,7 +10,7 @@ def extract_model_state_dict(input_checkpoint_path, output_model_state_dict_path
     output_model_state_dict_path (str): Path to save the extracted model state dictionary.
     """
     # Load the checkpoint
-    checkpoint = torch.load(input_checkpoint_path)
+    checkpoint = torch.load(input_checkpoint_path, map_location=torch.device('cpu'))
 
     # Extract the model state dictionary
     model_state_dict = checkpoint["model_state_dict"]
