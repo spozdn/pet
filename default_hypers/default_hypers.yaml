@@ -29,6 +29,8 @@ ARCHITECTURAL_HYPERS:
   DTYPE: float32 # float32 or float16 or bfloat16
   N_TARGETS: 1
   TARGET_INDEX_KEY: target_index
+  RESIDUAL_FACTOR: 0.5
+
 
 FITTING_SCHEME:
   INITIAL_LR: 1e-4

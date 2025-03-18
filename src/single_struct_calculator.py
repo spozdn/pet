@@ -11,8 +11,7 @@ from .utilities import string2dtype, get_quadrature_predictions
 
 class SingleStructCalculator:
     def __init__(
-        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None,
-        use_augmentation=False
+        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None, inversions=False, use_augmentation=False, add_self_contributions=False,
     ):
         if (quadrature_order is not None) and (use_augmentation):
             raise NotImplementedError("Simultaneous use of a quadrature and augmentation is not yet implemented")
@@ -51,6 +50,10 @@ class SingleStructCalculator:
             torch.load(path_to_model_state_dict,
                        map_location=torch.device(device))
         )
+
+        if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
+            model = model.module
+
         model.eval()
 
         self.model = model
@@ -58,10 +61,17 @@ class SingleStructCalculator:
         self.all_species = all_species
         self.device = device
 
+        if use_augmentation and (quadrature_order is not None or inversions):
+            raise NotImplementedError("Simultaneous use of a quadrature/inversions and augmentation is not yet implemented")
+
         if quadrature_order is not None:
             self.quadrature_order = int(quadrature_order)
         else:
             self.quadrature_order = None
+
+        self.inversions = inversions
+        self.use_augmentation = use_augmentation
+        self.add_self_contributions = add_self_contributions
 
     def forward(self, structure):
         molecule = MoleculeCPP(
@@ -86,29 +96,27 @@ class SingleStructCalculator:
         )
         graph = graph.to(self.device)
 
-        if self.quadrature_order is None:
-            if torch.cuda.is_available() and (torch.cuda.device_count() > 1):
-                self.model.module.augmentation = self.use_augmentation
-                self.model.module.create_graph = False
-                prediction_energy, prediction_forces = self.model([graph])
-            else:
-                prediction_energy, prediction_forces = self.model(
-                    graph, augmentation=self.use_augmentation, create_graph=False
-                )
-
+        if self.quadrature_order is None and not self.inversions:
+            prediction_energy, prediction_forces = self.model(
+                graph, augmentation=self.use_augmentation, create_graph=False
+            )
             prediction_energy_final = prediction_energy.data.cpu().numpy()
             prediction_forces_final = prediction_forces.data.cpu().numpy()
         else:
             prediction_energy_final, prediction_forces_final = get_quadrature_predictions(
-                graph, self.model, self.quadrature_order, string2dtype(
-                    self.architectural_hypers.DTYPE)
+                graph, self.model, self.quadrature_order, self.inversions, string2dtype(self.architectural_hypers.DTYPE)
             )
 
-        compositional_features = get_compositional_features(
-            [structure], self.all_species
-        )[0]
-        self_contributions_energy = np.dot(
-            compositional_features, self.self_contributions
-        )
-        energy_total = prediction_energy_final + self_contributions_energy
+        energy_total = prediction_energy_final
+
+        if self.add_self_contributions:
+            compositional_features = get_compositional_features(
+                [structure], self.all_species
+            )[0]
+            self_contributions_energy = np.dot(
+                compositional_features, self.self_contributions
+            )
+            # note: this may lead to numerical problems in less than double precision
+            energy_total = energy_total + self_contributions_energy
+
         return energy_total, prediction_forces_final
