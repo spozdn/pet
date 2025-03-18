@@ -13,7 +13,7 @@ def prepare_test(stucture_path, r_cut, n_gnn, n_trans, structure_index, hypers_p
     device = 'cpu'
     structure = ase.io.read(stucture_path, index=structure_index)
     hypers = load_hypers_from_file(hypers_path)
-    
+
 
     MLIP_SETTINGS = hypers.MLIP_SETTINGS
     ARCHITECTURAL_HYPERS = hypers.ARCHITECTURAL_HYPERS
@@ -46,6 +46,8 @@ def get_predictions_old_python(model, structure, all_species, ARCHITECTURAL_HYPE
         ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
         ARCHITECTURAL_HYPERS.USE_LONG_RANGE,
         ARCHITECTURAL_HYPERS.K_CUT,
+        ARCHITECTURAL_HYPERS.N_TARGETS > 1,
+        ARCHITECTURAL_HYPERS.TARGET_INDEX_KEY
     )
     if ARCHITECTURAL_HYPERS.USE_LONG_RANGE:
         raise NotImplementedError(
@@ -73,6 +75,8 @@ def get_predictions_cpp(model, structure, all_species, ARCHITECTURAL_HYPERS):
         ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
         ARCHITECTURAL_HYPERS.USE_LONG_RANGE,
         ARCHITECTURAL_HYPERS.K_CUT,
+        ARCHITECTURAL_HYPERS.N_TARGETS > 1,
+        ARCHITECTURAL_HYPERS.TARGET_INDEX_KEY
     )
     if ARCHITECTURAL_HYPERS.USE_LONG_RANGE:
         raise NotImplementedError(

@@ -75,7 +75,10 @@ def main():
 
     val_structures = ase.io.read(args.val_structures_path, index=":")
     structures = train_structures + val_structures
-    all_species = get_all_species(structures)
+    if FITTING_SCHEME.ALL_SPECIES_PATH is not None:
+        all_species = np.load(FITTING_SCHEME.ALL_SPECIES_PATH)
+    else:
+        all_species = get_all_species(structures)
 
     if "results" not in os.listdir("."):
         os.mkdir("results")
@@ -99,6 +102,8 @@ def main():
         ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
         ARCHITECTURAL_HYPERS.USE_LONG_RANGE,
         ARCHITECTURAL_HYPERS.K_CUT,
+        ARCHITECTURAL_HYPERS.N_TARGETS > 1,
+        ARCHITECTURAL_HYPERS.TARGET_INDEX_KEY
     )
     val_graphs = get_pyg_graphs(
         val_structures,
@@ -107,6 +112,8 @@ def main():
         ARCHITECTURAL_HYPERS.USE_ADDITIONAL_SCALAR_ATTRIBUTES,
         ARCHITECTURAL_HYPERS.USE_LONG_RANGE,
         ARCHITECTURAL_HYPERS.K_CUT,
+        ARCHITECTURAL_HYPERS.N_TARGETS > 1,
+        ARCHITECTURAL_HYPERS.TARGET_INDEX_KEY
     )
 
     train_targets = get_targets(train_structures, GENERAL_TARGET_SETTINGS)

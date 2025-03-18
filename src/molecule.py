@@ -7,7 +7,7 @@ from matscipy.neighbours import neighbour_list as neighbor_list
 
 class Molecule:
     def __init__(
-        self, atoms, r_cut, use_additional_scalar_attributes, use_long_range, k_cut
+        self, atoms, r_cut, use_additional_scalar_attributes, use_long_range, k_cut, multi_target, target_index_key
     ):
 
         self.use_additional_scalar_attributes = use_additional_scalar_attributes
@@ -74,6 +74,11 @@ class Molecule:
             self.k_vectors = get_all_k(self.cell[0], self.cell[1], self.cell[2], k_cut)
             self.k_cut = k_cut
             self.volume = get_volume(self.cell[0], self.cell[1], self.cell[2])
+
+        if multi_target:
+            self.target_index = int(self.atoms.info[target_index_key])
+        else:
+            self.target_index = None
 
     def get_max_num(self):
         maximum = None
@@ -151,6 +156,9 @@ class Molecule:
             "n_atoms": len(self.atoms.positions),
         }
 
+        if self.target_index is not None:
+            kwargs['target_id'] = self.target_index
+
         if self.use_additional_scalar_attributes:
             kwargs["neighbor_scalar_attributes"] = torch.tensor(
                 neighbor_scalar_attributes, dtype=torch.get_default_dtype()
@@ -190,7 +198,7 @@ class Molecule:
 
 class MoleculeCPP:
     def __init__(
-        self, atoms, r_cut, use_additional_scalar_attributes, use_long_range, k_cut
+        self, atoms, r_cut, use_additional_scalar_attributes, use_long_range, k_cut, multi_target, target_index_key
     ):
 
         self.use_additional_scalar_attributes = use_additional_scalar_attributes
@@ -203,7 +211,7 @@ class MoleculeCPP:
             raise NotImplementedError("Long range is not implemented in cpp")
         if self.use_additional_scalar_attributes:
             raise NotImplementedError("Additional scalar attributes are not implemented in cpp")
-        
+
         def is_3d_crystal(atoms):
             pbc = atoms.get_pbc()
             if isinstance(pbc, bool):
@@ -227,9 +235,14 @@ class MoleculeCPP:
         else:
             self.max_num = torch.max(torch.bincount(self.i_list))
 
+        if multi_target:
+            self.target_index = int(self.atoms.info[target_index_key])
+        else:
+            self.target_index = None
+
     def get_num_k(self):
         raise NotImplementedError("Long range is not implemented in cpp")
-    
+
     def get_max_num(self):
         return self.max_num
 
@@ -251,6 +264,9 @@ class MoleculeCPP:
             "n_atoms": len(self.atoms.positions),
         }
 
+        if self.target_index is not None:
+            kwargs['target_id'] = self.target_index
+
         result = Data(**kwargs)
 
         return result
@@ -266,6 +282,8 @@ def batch_to_dict(batch):
         "neighbors_index": batch.neighbors_index.transpose(0, 1),
         "neighbors_pos": batch.neighbors_pos,
     }
+    if hasattr(batch, 'target_id'):
+        batch_dict['target_id'] = batch.target_id
 
     if hasattr(batch, "neighbor_scalar_attributes"):
         batch_dict["neighbor_scalar_attributes"] = batch.neighbor_scalar_attributes

@@ -35,10 +35,12 @@ def get_pyg_graphs(
     USE_ADDITIONAL_SCALAR_ATTRIBUTES,
     USE_LONG_RANGE,
     K_CUT,
+    MULTI_TARGET,
+    TARGET_INDEX_KEY
 ):
     molecules = [
         Molecule(
-            structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES, USE_LONG_RANGE, K_CUT
+            structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES, USE_LONG_RANGE, K_CUT, MULTI_TARGET, TARGET_INDEX_KEY
         )
         for structure in tqdm(structures)
     ]

@@ -1,0 +1,12 @@
+ARCHITECTURAL_HYPERS:
+  R_CUT: 100
+  N_TRANS_LAYERS: 2
+  N_GNN_LAYERS: 2
+
+FITTING_SCHEME:
+  EPOCH_NUM: 10
+  EPOCHS_WARMUP: 0
+  MODEL_TO_START_WITH: results/pretraining/best_val_mae_both_model_state_dict
+  ALL_SPECIES_PATH: results/pretraining/all_species.npy
+MLIP_SETTINGS:
+  USE_ENERGIES: True
