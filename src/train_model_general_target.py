@@ -46,9 +46,15 @@ def main():
     parser.add_argument(
         "name_of_calculation", help="Name of this calculation", type=str
     )
+    parser.add_argument(
+        "--gpu_id", help="ID of the GPU to use", type=int, default=0
+    )
     args = parser.parse_args()
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device(f"cuda:{args.gpu_id}")
+    else:
+        device = torch.device("cpu")
 
     hypers = set_hypers_from_files(args.provided_hypers_path, args.default_hypers_path)
     dtype = string2dtype(hypers.ARCHITECTURAL_HYPERS.DTYPE)
@@ -131,7 +137,11 @@ def main():
         load_checkpoint(model, optim, scheduler, f"results/{name_to_load}/checkpoint")
 
     history = []
-    logger = FullLogger(FITTING_SCHEME.SUPPORT_MISSING_VALUES)
+    logger = FullLogger(
+        FITTING_SCHEME.SUPPORT_MISSING_VALUES,
+        FITTING_SCHEME.USE_SHIFT_AGNOSTIC_LOSS,
+        device,
+    )
     mae_model_keeper = ModelKeeper()
     rmse_model_keeper = ModelKeeper()
 

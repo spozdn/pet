@@ -540,6 +540,7 @@ class PET(torch.nn.Module):
         self.TARGET_TYPE = hypers.TARGET_TYPE
         self.TARGET_AGGREGATION = hypers.TARGET_AGGREGATION
         self.N_GNN_LAYERS = hypers.N_GNN_LAYERS
+        self.RESIDUAL_FACTOR = hypers.RESIDUAL_FACTOR
 
     def get_predictions(self, batch_dict: Dict[str, torch.Tensor]):
 
@@ -579,7 +580,7 @@ class PET(torch.nn.Module):
 
             # batch_dict['input_messages'] = output_messages[neighbors_index, neighbors_pos]
             new_input_messages = output_messages[neighbors_index, neighbors_pos]
-            batch_dict["input_messages"] = 0.5 * (
+            batch_dict["input_messages"] = self.RESIDUAL_FACTOR * (
                 batch_dict["input_messages"] + new_input_messages
             )
 

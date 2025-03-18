@@ -1,5 +1,5 @@
 import pytest
-from pet.utilities import get_shift_agnostic_loss
+from pet.utilities import get_shift_agnostic_mse as get_shift_agnostic_loss
 import torch
 
 
