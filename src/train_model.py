@@ -181,9 +181,8 @@ def fit_pet(
         multiplication_rmse_model_keeper = ModelKeeper()
         multiplication_mae_model_keeper = ModelKeeper()
 
-    pbar = tqdm(range(FITTING_SCHEME.EPOCH_NUM))
 
-    for epoch in pbar:
+    for epoch in range(FITTING_SCHEME.EPOCH_NUM):
 
         model.train(True)
         for batch in train_loader:
@@ -392,13 +391,19 @@ def fit_pet(
                 f" {now['forces']['train']['mae']}/{now['forces']['train']['rmse']}"
             )
 
-        pbar.set_description(
-            f"lr: {scheduler.get_last_lr()}; " + val_mae_message + train_mae_message
-        )
-
         history.append(now)
         scheduler.step()
         elapsed = time.time() - TIME_SCRIPT_STARTED
+
+        print(
+            f"lr: {scheduler.get_last_lr()}; "
+        )
+
+        print(train_mae_message)
+        print(val_mae_message)
+
+        print(f"elapsed: {elapsed}")
+
         if FITTING_SCHEME.MAX_TIME is not None:
             if elapsed > FITTING_SCHEME.MAX_TIME:
                 break
