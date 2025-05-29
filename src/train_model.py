@@ -3,6 +3,7 @@ import os
 
 import torch
 import ase.io
+from ase.data import chemical_symbols
 import numpy as np
 from tqdm import tqdm
 from .utilities import ModelKeeper
@@ -23,6 +24,116 @@ from .utilities import dtype2string, string2dtype
 from .pet import FlagsWrapper
 
 
+def parse_groups_file(groups_path):
+    """Parse groups file and return list of lists of chemical symbols.
+
+    Args:
+        groups_path: Path to groups file where each line contains
+                     space-separated chemical symbols
+
+    Returns:
+        List of lists of chemical symbols (e.g., [['H'], ['C'], ['N', 'O']])
+
+    Raises:
+        ValueError: If file format is invalid or contains non-existent elements
+    """
+    groups = []
+
+    with open(groups_path, 'r') as f:
+        lines = f.readlines()
+
+    for i, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line:  # Skip empty lines
+            continue
+
+        elements = line.split()
+        group = []
+
+        for element in elements:
+            # Check if element is a valid chemical symbol
+            try:
+                # chemical_symbols is 0-indexed but atomic numbers start at 1
+                # so H is at index 1, He at index 2, etc.
+                if (element not in chemical_symbols or
+                        chemical_symbols.index(element) == 0):
+                    raise ValueError(
+                        f"Invalid chemical symbol '{element}' in line {i}"
+                    )
+            except ValueError:
+                raise ValueError(
+                    f"Invalid chemical symbol '{element}' in line {i}"
+                )
+
+            group.append(element)
+
+        if group:  # Only add non-empty groups
+            groups.append(group)
+
+    return groups
+
+
+def validate_and_convert_groups(groups, all_species):
+    """Validate groups against all_species and convert to atomic numbers.
+
+    Args:
+        groups: List of lists of chemical symbols
+        all_species: Numpy array of atomic numbers present in dataset
+
+    Returns:
+        List of lists of atomic numbers
+
+    Raises:
+        ValueError: If groups are not valid (intersecting or don't match all_species)
+    """
+    # Convert groups to atomic numbers
+    groups_atomic = []
+    element_to_group = {}  # Track which group each element belongs to
+
+    for group_idx, group in enumerate(groups):
+        group_atomic = []
+        for element in group:
+            atomic_num = chemical_symbols.index(element)
+
+            # Check for intersecting groups
+            if atomic_num in element_to_group:
+                prev_group = element_to_group[atomic_num]
+                raise ValueError(
+                    f"Element '{element}' (atomic number {atomic_num}) appears in "
+                    f"multiple groups: group {prev_group + 1} and "
+                    f"group {group_idx + 1}"
+                )
+
+            element_to_group[atomic_num] = group_idx
+            group_atomic.append(atomic_num)
+
+        groups_atomic.append(group_atomic)
+
+    # Get all atomic numbers from groups
+    all_from_groups = set(element_to_group.keys())
+    all_from_species = set(all_species.astype(int))
+
+    # Check if they match
+    if all_from_groups != all_from_species:
+        # Find differences for detailed error message
+        in_groups_not_species = all_from_groups - all_from_species
+        in_species_not_groups = all_from_species - all_from_groups
+
+        error_msg = "Groups do not match dataset species:\n"
+
+        if in_groups_not_species:
+            elements = [chemical_symbols[z] for z in sorted(in_groups_not_species)]
+            error_msg += f"  Elements in groups but not in dataset: {elements}\n"
+
+        if in_species_not_groups:
+            elements = [chemical_symbols[z] for z in sorted(in_species_not_groups)]
+            error_msg += f"  Elements in dataset but not in groups: {elements}"
+
+        raise ValueError(error_msg)
+
+    return groups_atomic
+
+
 def fit_pet(
     train_structures,
     val_structures,
@@ -30,6 +141,7 @@ def fit_pet(
     name_of_calculation,
     device,
     output_dir,
+    groups_path=None,
 ):
     TIME_SCRIPT_STARTED = time.time()
 
@@ -63,6 +175,46 @@ def fit_pet(
         all_species = np.load(FITTING_SCHEME.ALL_SPECIES_PATH)
     else:
         all_species = get_all_species(structures)
+
+    # Print all_species in both formats
+    print("\nAll species in dataset:")
+    print(f"1) Numeric format (atomic numbers): {all_species}")
+    species_symbols = [chemical_symbols[int(z)] for z in all_species]
+    print(f"2) Chemical symbols: {species_symbols}\n")
+
+    # Parse and validate groups if provided
+    groups_atomic = None
+    if groups_path is not None:
+        print(f"Loading groups from: {groups_path}")
+        groups_symbols = parse_groups_file(groups_path)
+        print(f"Found {len(groups_symbols)} groups")
+
+        # Validate and convert to atomic numbers
+        groups_atomic = validate_and_convert_groups(
+            groups_symbols, all_species
+        )
+
+        # Print the groups for confirmation
+        print("Groups in atomic number format:")
+        for i, group in enumerate(groups_atomic):
+            symbols = [chemical_symbols[z] for z in group]
+            print(f"  Group {i + 1}: {group} ({symbols})")
+        print()
+
+        groups_indices = [[] for _ in range(len(groups_atomic))]
+        groups_mapping = [None for _ in range(len(all_species))]
+        for i, group in enumerate(groups_atomic):
+            for group_element in group:
+                for j, all_species_element in enumerate(all_species):
+                    if group_element == all_species_element:
+                        groups_indices[i].append(j)
+                        groups_mapping[j] = i
+                        break
+
+        print("Groups indices:")
+        print(groups_indices)
+        print("Groups mapping:")
+        print(groups_mapping)
 
     name_to_load, NAME_OF_CALCULATION = get_calc_names(
         os.listdir(output_dir), name_of_calculation
@@ -139,6 +291,12 @@ def fit_pet(
         model.load_state_dict(torch.load(FITTING_SCHEME.MODEL_TO_START_WITH))
         model = model.to(dtype=dtype)
 
+    # Count and print total number of parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total number of parameters in model: {total_params:,}")
+    print(f"Total number of trainable parameters: {trainable_params:,}")
+
     optim = get_optimizer(model, FITTING_SCHEME)
     scheduler = get_scheduler(optim, FITTING_SCHEME)
 
@@ -186,6 +344,7 @@ def fit_pet(
 
         model.train(True)
         for batch in train_loader:
+            print('central species:', np.unique(batch.central_species.data.cpu().numpy()))
             if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 
@@ -486,6 +645,13 @@ def main():
     parser.add_argument(
         "--gpu_id", help="ID of the GPU to use", type=int, default=0
     )
+    parser.add_argument(
+        "--groups_path",
+        help="Path to groups file where each line contains "
+             "space-separated chemical symbols",
+        type=str,
+        default=None
+    )
     args = parser.parse_args()
 
     if torch.cuda.is_available():
@@ -510,6 +676,7 @@ def main():
         name_of_calculation,
         device,
         output_dir,
+        args.groups_path,
     )
 
 
