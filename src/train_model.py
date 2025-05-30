@@ -1,5 +1,6 @@
 from .data_preparation import get_all_species
 import os
+import shutil
 
 import torch
 import ase.io
@@ -184,6 +185,7 @@ def fit_pet(
 
     # Parse and validate groups if provided
     groups_atomic = None
+    groups_mapping = None
     if groups_path is not None:
         print(f"Loading groups from: {groups_path}")
         groups_symbols = parse_groups_file(groups_path)
@@ -216,12 +218,23 @@ def fit_pet(
         print("Groups mapping:")
         print(groups_mapping)
 
+        groups_mapping = np.array(groups_mapping)
+
     name_to_load, NAME_OF_CALCULATION = get_calc_names(
         os.listdir(output_dir), name_of_calculation
     )
 
     os.mkdir(f"{output_dir}/{NAME_OF_CALCULATION}")
     np.save(f"{output_dir}/{NAME_OF_CALCULATION}/all_species.npy", all_species)
+
+    # Save groups mapping and copy groups file if groups were provided
+    if groups_mapping is not None:
+        np.save(
+            f"{output_dir}/{NAME_OF_CALCULATION}/groups_mapping.npy",
+            groups_mapping
+        )
+        shutil.copy(groups_path, f"{output_dir}/{NAME_OF_CALCULATION}/groups_used.txt")
+
     hypers.UTILITY_FLAGS.CALCULATION_TYPE = "mlip"
     save_hypers(hypers, f"{output_dir}/{NAME_OF_CALCULATION}/hypers_used.yaml")
 
@@ -279,7 +292,11 @@ def fit_pet(
         train_graphs, val_graphs, FITTING_SCHEME
     )
 
-    model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species)).to(device)
+    # Convert groups_mapping to torch tensor if provided
+    if groups_mapping is not None:
+        groups_mapping = torch.tensor(groups_mapping, dtype=torch.long).to(device)
+
+    model = PET(ARCHITECTURAL_HYPERS, 0.0, len(all_species), groups_mapping).to(device)
     model = PETUtilityWrapper(model, FITTING_SCHEME.GLOBAL_AUG)
 
     model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
@@ -344,7 +361,7 @@ def fit_pet(
 
         model.train(True)
         for batch in train_loader:
-            print('central species:', np.unique(batch.central_species.data.cpu().numpy()))
+            # print('central species:', np.unique(batch.central_species.data.cpu().numpy()))
             if not FITTING_SCHEME.MULTI_GPU:
                 batch.to(device)
 

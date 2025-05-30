@@ -14,17 +14,22 @@ class CentralSplitter(torch.nn.Module):
         super(CentralSplitter, self).__init__()
 
     def forward(self, features, central_species):
-        all_species = np.unique(central_species)
-        all_species = [str(specie) for specie in all_species]
+        # Use torch.unique instead of numpy
+        all_species = torch.unique(central_species)
+        all_species_list = [str(specie.item()) for specie in all_species]
 
         result = {}
-        for specie in all_species:
+        for specie in all_species_list:
             result[specie] = {}
 
         for key, value in features.items():
-            for specie in all_species:
-                mask_now = central_species == int(specie)
-                result[specie][key] = value[mask_now]
+            if value is None:
+                for specie in all_species_list:
+                    result[specie][key] = None
+            else:
+                for specie in all_species_list:
+                    mask_now = central_species == int(specie)
+                    result[specie][key] = value[mask_now]
         return result
 
 
@@ -33,32 +38,39 @@ class CentralUniter(torch.nn.Module):
         super(CentralUniter, self).__init__()
 
     def forward(self, features, central_species):
-        all_species = np.unique(central_species)
-        all_species = [str(specie) for specie in all_species]
-        specie = all_species[0]
+        # Use torch operations instead of numpy
+        all_species = torch.unique(central_species)
+        all_species_list = [str(specie.item()) for specie in all_species]
+        specie = all_species_list[0]
 
         shapes = {}
         for key, value in features[specie].items():
-            now = list(value.shape)
-            now[0] = 0
-            shapes[key] = now
+            if value is not None:
+                now = list(value.shape)
+                now[0] = 0
+                shapes[key] = now
+            else:
+                shapes[key] = None
 
         device = None
-        for specie in all_species:
+        for specie in all_species_list:
             for key, value in features[specie].items():
-                num = features[specie][key].shape[0]
-                device = features[specie][key].device
-                shapes[key][0] += num
+                if value is not None:
+                    num = features[specie][key].shape[0]
+                    device = features[specie][key].device
+                    shapes[key][0] += num
 
         result = {
-            key: torch.empty(shape, dtype=torch.get_default_dtype()).to(device)
+            key: (torch.empty(shape, dtype=torch.get_default_dtype())
+                  .to(device) if shape is not None else None)
             for key, shape in shapes.items()
         }
 
         for specie in features.keys():
             for key, value in features[specie].items():
-                mask = int(specie) == central_species
-                result[key][mask] = features[specie][key]
+                if value is not None:
+                    mask = int(specie) == central_species
+                    result[key][mask] = features[specie][key]
 
         return result
 
@@ -317,20 +329,29 @@ class CartesianTransformer(torch.nn.Module):
             return {"output_messages": output_messages}
 
 
-class CentralSpecificModel(torch.nn.Module):
-    def __init__(self, models):
-        super(CentralSpecificModel, self).__init__()
+class GroupSpecificModel(torch.nn.Module):
+    def __init__(self, models, groups_mapping):
+        super(GroupSpecificModel, self).__init__()
         self.models = torch.nn.ModuleDict(models)
+        # Register groups_mapping as a buffer so it moves with the model
+        # to device
+        self.register_buffer('groups_mapping', groups_mapping)
         self.splitter = CentralSplitter()
         self.uniter = CentralUniter()
 
     def forward(self, batch_dict):
-        central_indices = batch_dict["central_species"].data.cpu().numpy()
+        # Use torch operations to get group indices
+        central_species = batch_dict["central_species"]
+        central_indices = self.groups_mapping[central_species]
+        # Pass torch tensor directly - no conversion to numpy
         splitted = self.splitter(batch_dict, central_indices)
 
         result = {}
         for key in splitted.keys():
-            result[str(key)] = self.models[str(key)](splitted[key])
+            if splitted[key] is not None:
+                result[str(key)] = self.models[str(key)](splitted[key])
+            else:
+                result[str(key)] = None
 
         result = self.uniter(result, central_indices)
         return result
@@ -415,7 +436,7 @@ class CentralTokensPredictor(torch.nn.Module):
 
     def forward(self, central_tokens: torch.Tensor, central_species: torch.Tensor, target_indices: torch.Tensor):
         predictions = self.head(
-            {"pooled": central_tokens, 'target_indices' : target_indices}
+            {"pooled": central_tokens, 'target_indices' : target_indices, 'central_species' : central_species}
         )["atomic_predictions"]
         return predictions
 
@@ -443,7 +464,7 @@ class MessagesPredictor(torch.nn.Module):
         else:
             pooled = messages_proceed.sum(dim=1)
 
-        predictions = self.head({"pooled": pooled, 'target_indices' : target_indices})[
+        predictions = self.head({"pooled": pooled, 'target_indices' : target_indices, 'central_species' : central_species})[
             "atomic_predictions"
         ]
         return predictions
@@ -465,7 +486,7 @@ class MessagesBondsPredictor(torch.nn.Module):
         target_indices: torch.Tensor
     ):
         predictions = self.head(
-            {"pooled": messages, "target_indices" : target_indices}
+            {"pooled": messages, "target_indices" : target_indices, 'central_species' : central_species}
         )["atomic_predictions"]
 
         mask_expanded = mask[..., None].repeat(1, 1, predictions.shape[2])
@@ -481,7 +502,7 @@ class MessagesBondsPredictor(torch.nn.Module):
 
 
 class PET(torch.nn.Module):
-    def __init__(self, hypers, transformer_dropout, n_atomic_species):
+    def __init__(self, hypers, transformer_dropout, n_atomic_species, groups_mapping=None):
         super(PET, self).__init__()
         self.hypers = hypers
         transformer_d_model = hypers.TRANSFORMER_D_MODEL
@@ -501,7 +522,14 @@ class PET(torch.nn.Module):
         self.embedding = nn.Embedding(
             n_atomic_species + 1, transformer_d_model)
         gnn_layers = []
+
         if transformers_central_specific:
+            raise ValueError("transformers_central_specific is outdated")
+        if heads_central_specific:
+            raise ValueError("heads_central_specific is outdated")
+
+        if groups_mapping is not None:
+            num_groups = len(torch.unique(groups_mapping))
             for layer_index in range(n_gnn_layers):
                 if layer_index == 0:
                     is_first = True
@@ -519,10 +547,10 @@ class PET(torch.nn.Module):
                         add_central_tokens[layer_index],
                         is_first,
                     )
-                    for i in range(len(all_species))
+                    for i in range(num_groups)
                 }
 
-                gnn_layers.append(CentralSpecificModel(models))
+                gnn_layers.append(GroupSpecificModel(models, groups_mapping))
         else:
             for layer_index in range(n_gnn_layers):
                 if layer_index == 0:
@@ -545,18 +573,14 @@ class PET(torch.nn.Module):
         self.gnn_layers = torch.nn.ModuleList(gnn_layers)
 
         heads = []
-        if heads_central_specific:
+        if groups_mapping is not None:
+            num_groups = len(torch.unique(groups_mapping))
             for _ in range(n_gnn_layers):
                 models = {
                     str(i): Head(hypers, transformer_d_model, head_n_neurons)
-                    for i in range(len(all_species))
+                    for i in range(num_groups)
                 }
-                heads.append(CentralSpecificModel(models))
-
-            models = {
-                str(i): Head(hypers, transformer_d_model, head_n_neurons)
-                for i in range(len(all_species))
-            }
+                heads.append(GroupSpecificModel(models, groups_mapping))
         else:
             for _ in range(n_gnn_layers):
                 heads.append(Head(hypers, transformer_d_model, head_n_neurons))
@@ -571,18 +595,14 @@ class PET(torch.nn.Module):
 
         if hypers.USE_BOND_ENERGIES:
             bond_heads = []
-            if heads_central_specific:
+            if groups_mapping is not None:
+                num_groups = len(torch.unique(groups_mapping))
                 for _ in range(n_gnn_layers):
                     models = {
                         str(i): Head(hypers, transformer_d_model, head_n_neurons)
-                        for i in range(len(all_species))
+                        for i in range(num_groups)
                     }
-                    bond_heads.append(CentralSpecificModel(models))
-
-                models = {
-                    str(i): Head(hypers, transformer_d_model, head_n_neurons)
-                    for i in range(len(all_species))
-                }
+                    bond_heads.append(GroupSpecificModel(models, groups_mapping))
             else:
                 for _ in range(n_gnn_layers):
                     bond_heads.append(
