@@ -13,7 +13,7 @@ import pickle
 from torch_geometric.nn import DataParallel
 
 from .hypers import save_hypers, set_hypers_from_files, Hypers, hypers_to_dict
-from .pet import PET, PETMLIPWrapper, PETUtilityWrapper
+from .pet import PET, PETMLIPWrapper, PETUtilityWrapper, PETMLIPBatchSortWrapper
 from .utilities import FullLogger, get_scheduler, load_checkpoint, get_data_loaders
 from .utilities import get_rmse, get_loss, set_reproducibility, get_calc_names
 from .utilities import get_optimizer
@@ -300,6 +300,11 @@ def fit_pet(
     model = PETUtilityWrapper(model, FITTING_SCHEME.GLOBAL_AUG)
 
     model = PETMLIPWrapper(model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES)
+
+    # If groups are provided, wrap with the batch-sorting wrapper to enable
+    # chunked per-group execution without in-layer shuffling
+    if groups_mapping is not None:
+        model = PETMLIPBatchSortWrapper(model, groups_mapping)
     if FITTING_SCHEME.MULTI_GPU and torch.cuda.is_available():
         model = DataParallel(FlagsWrapper(model))
         model = model.to(torch.device("cuda:0"))

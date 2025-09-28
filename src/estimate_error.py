@@ -62,7 +62,7 @@ def main():
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    print(f"using {device} for calculations")
     HYPERS_PATH = args.path_to_calc_folder + "/hypers_used.yaml"
     PATH_TO_MODEL_STATE_DICT = (
         args.path_to_calc_folder + "/" + args.checkpoint + "_state_dict"

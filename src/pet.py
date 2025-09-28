@@ -7,6 +7,8 @@ from typing import Dict, Optional
 from .transformer import TransformerLayer, Transformer
 from .molecule import batch_to_dict
 from .utilities import get_rotations, NeverRun
+from .permute_batch import permute_batch_dict
+from torch_geometric.data import Data
 
 
 class CentralSplitter(torch.nn.Module):
@@ -340,21 +342,104 @@ class GroupSpecificModel(torch.nn.Module):
         self.uniter = CentralUniter()
 
     def forward(self, batch_dict):
-        # Use torch operations to get group indices
-        central_species = batch_dict["central_species"]
-        central_indices = self.groups_mapping[central_species]
-        # Pass torch tensor directly - no conversion to numpy
-        splitted = self.splitter(batch_dict, central_indices)
+        # Optimized path: expect contiguous chunks metadata from batch sorting
+        if ("group_chunk_bounds" not in batch_dict) or ("group_ids" not in batch_dict):
+            raise ValueError(
+                "group_chunk_bounds and group_ids must be present in batch_dict. "
+                "Use the batch-sorting wrapper to provide them."
+            )
 
-        result = {}
-        for key in splitted.keys():
-            if splitted[key] is not None:
-                result[str(key)] = self.models[str(key)](splitted[key])
+        bounds = batch_dict["group_chunk_bounds"]
+        group_ids = batch_dict["group_ids"]
+
+        if bounds.dim() != 2 or bounds.shape[1] != 2:
+            raise ValueError("group_chunk_bounds must have shape [num_groups_present, 2]")
+        if group_ids.dim() != 1 or group_ids.shape[0] != bounds.shape[0]:
+            raise ValueError(
+                "group_ids must be 1D and aligned with group_chunk_bounds rows"
+            )
+
+        # Detect whether this GroupSpecificModel wraps a GNN layer or a head
+        is_head = ("pooled" in batch_dict)
+
+        if is_head:
+            # Head path: compute atomic_predictions by slicing contiguous chunks
+            total_n = batch_dict["pooled"].shape[0]
+            outputs = None
+            for idx in range(bounds.shape[0]):
+                start, end = bounds[idx, 0].item(), bounds[idx, 1].item()
+                gid = str(int(group_ids[idx].item()))
+                sli = slice(start, end)
+                sub = {}
+                for key in ["pooled", "target_indices", "central_species"]:
+                    if key in batch_dict and batch_dict[key] is not None:
+                        sub[key] = batch_dict[key][sli]
+                out = self.models[gid](sub)
+                preds = out["atomic_predictions"]
+                if outputs is None:
+                    full_shape = list(preds.shape)
+                    full_shape[0] = total_n
+                    outputs = torch.empty(
+                        full_shape, dtype=preds.dtype, device=preds.device
+                    )
+                outputs[sli] = preds
+            return {"atomic_predictions": outputs}
+        else:
+            # GNN path: compute output_messages (and optional central_token) chunk-wise
+            total_n = batch_dict["x"].shape[0]
+            full_output_messages = None
+            full_central_token = None
+
+            for idx in range(bounds.shape[0]):
+                start, end = bounds[idx, 0].item(), bounds[idx, 1].item()
+                gid = str(int(group_ids[idx].item()))
+                sli = slice(start, end)
+                sub = {}
+                for key in [
+                    "x",
+                    "neighbor_species",
+                    "input_messages",
+                    "mask",
+                    "batch",
+                    "nums",
+                    "central_species",
+                    "neighbor_scalar_attributes",
+                    "central_scalar_attributes",
+                ]:
+                    if key in batch_dict and batch_dict[key] is not None:
+                        sub[key] = batch_dict[key][sli]
+
+                out = self.models[gid](sub)
+                out_msgs = out["output_messages"]
+
+                if full_output_messages is None:
+                    msg_shape = list(out_msgs.shape)
+                    msg_shape[0] = total_n
+                    full_output_messages = torch.empty(
+                        msg_shape, dtype=out_msgs.dtype, device=out_msgs.device
+                    )
+
+                full_output_messages[sli] = out_msgs
+
+                if "central_token" in out:
+                    central_tok = out["central_token"]
+                    if full_central_token is None:
+                        tok_shape = list(central_tok.shape)
+                        tok_shape[0] = total_n
+                        full_central_token = torch.empty(
+                            tok_shape,
+                            dtype=central_tok.dtype,
+                            device=central_tok.device,
+                        )
+                    full_central_token[sli] = central_tok
+
+            if full_central_token is not None:
+                return {
+                    "output_messages": full_output_messages,
+                    "central_token": full_central_token,
+                }
             else:
-                result[str(key)] = None
-
-        result = self.uniter(result, central_indices)
-        return result
+                return {"output_messages": full_output_messages}
 
 
 class FeedForward(torch.nn.Module):
@@ -433,11 +518,25 @@ class CentralTokensPredictor(torch.nn.Module):
         super(CentralTokensPredictor, self).__init__()
         self.head = head
         self.hypers = hypers
+        self.group_chunk_bounds = None
+        self.group_ids = None
 
-    def forward(self, central_tokens: torch.Tensor, central_species: torch.Tensor, target_indices: torch.Tensor):
-        predictions = self.head(
-            {"pooled": central_tokens, 'target_indices' : target_indices, 'central_species' : central_species}
-        )["atomic_predictions"]
+    def forward(
+        self,
+        central_tokens: torch.Tensor,
+        central_species: torch.Tensor,
+        target_indices: torch.Tensor,
+    ):
+        head_input = {
+            "pooled": central_tokens,
+            "target_indices": target_indices,
+            "central_species": central_species,
+        }
+        if self.group_chunk_bounds is not None:
+            head_input["group_chunk_bounds"] = self.group_chunk_bounds
+        if self.group_ids is not None:
+            head_input["group_ids"] = self.group_ids
+        predictions = self.head(head_input)["atomic_predictions"]
         return predictions
 
 
@@ -446,6 +545,8 @@ class MessagesPredictor(torch.nn.Module):
         super(MessagesPredictor, self).__init__()
         self.head = head
         self.AVERAGE_POOLING = hypers.AVERAGE_POOLING
+        self.group_chunk_bounds = None
+        self.group_ids = None
 
     def forward(
         self,
@@ -454,7 +555,7 @@ class MessagesPredictor(torch.nn.Module):
         nums: torch.Tensor,
         central_species: torch.Tensor,
         multipliers: torch.Tensor,
-        target_indices: torch.Tensor
+        target_indices: torch.Tensor,
     ):
         messages_proceed = messages * multipliers[:, :, None]
         messages_proceed[mask] = 0.0
@@ -464,9 +565,16 @@ class MessagesPredictor(torch.nn.Module):
         else:
             pooled = messages_proceed.sum(dim=1)
 
-        predictions = self.head({"pooled": pooled, 'target_indices' : target_indices, 'central_species' : central_species})[
-            "atomic_predictions"
-        ]
+        head_input = {
+            "pooled": pooled,
+            "target_indices": target_indices,
+            "central_species": central_species,
+        }
+        if self.group_chunk_bounds is not None:
+            head_input["group_chunk_bounds"] = self.group_chunk_bounds
+        if self.group_ids is not None:
+            head_input["group_ids"] = self.group_ids
+        predictions = self.head(head_input)["atomic_predictions"]
         return predictions
 
 
@@ -475,6 +583,8 @@ class MessagesBondsPredictor(torch.nn.Module):
         super(MessagesBondsPredictor, self).__init__()
         self.head = head
         self.AVERAGE_BOND_ENERGIES = hypers.AVERAGE_BOND_ENERGIES
+        self.group_chunk_bounds = None
+        self.group_ids = None
 
     def forward(
         self,
@@ -483,11 +593,18 @@ class MessagesBondsPredictor(torch.nn.Module):
         nums: torch.Tensor,
         central_species: torch.Tensor,
         multipliers: torch.Tensor,
-        target_indices: torch.Tensor
+        target_indices: torch.Tensor,
     ):
-        predictions = self.head(
-            {"pooled": messages, "target_indices" : target_indices, 'central_species' : central_species}
-        )["atomic_predictions"]
+        head_input = {
+            "pooled": messages,
+            "target_indices": target_indices,
+            "central_species": central_species,
+        }
+        if self.group_chunk_bounds is not None:
+            head_input["group_chunk_bounds"] = self.group_chunk_bounds
+        if self.group_ids is not None:
+            head_input["group_ids"] = self.group_ids
+        predictions = self.head(head_input)["atomic_predictions"]
 
         mask_expanded = mask[..., None].repeat(1, 1, predictions.shape[2])
         predictions = torch.where(mask_expanded, 0.0, predictions)
@@ -674,18 +791,48 @@ class PET(torch.nn.Module):
                 batch_dict["input_messages"] + new_input_messages
             )
 
+            # Provide group metadata to predictors' heads via attributes
+            central_tokens_predictor.group_chunk_bounds = batch_dict.get(
+                "group_chunk_bounds", None
+            )
+            central_tokens_predictor.group_ids = batch_dict.get(
+                "group_ids", None
+            )
+            messages_predictor.group_chunk_bounds = batch_dict.get(
+                "group_chunk_bounds", None
+            )
+            messages_predictor.group_ids = batch_dict.get("group_ids", None)
+
             if "central_token" in result.keys():
                 atomic_predictions = atomic_predictions + central_tokens_predictor(
-                    result["central_token"], central_species, target_indices
+                    result["central_token"],
+                    central_species,
+                    target_indices,
                 )
             else:
                 atomic_predictions = atomic_predictions + messages_predictor(
-                    output_messages, mask, nums, central_species, multipliers, target_indices
+                    output_messages,
+                    mask,
+                    nums,
+                    central_species,
+                    multipliers,
+                    target_indices,
                 )
 
             if self.USE_BOND_ENERGIES:
+                messages_bonds_predictor.group_chunk_bounds = batch_dict.get(
+                    "group_chunk_bounds", None
+                )
+                messages_bonds_predictor.group_ids = batch_dict.get(
+                    "group_ids", None
+                )
                 atomic_predictions = atomic_predictions + messages_bonds_predictor(
-                    output_messages, mask, nums, central_species, multipliers, target_indices
+                    output_messages,
+                    mask,
+                    nums,
+                    central_species,
+                    multipliers,
+                    target_indices,
                 )
 
         if self.TARGET_TYPE == "structural":
@@ -840,3 +987,71 @@ class FlagsWrapper(torch.nn.Module):
         return self.model(
             batch, augmentation=self.augmentation, create_graph=self.create_graph
         )
+
+
+class PETMLIPBatchSortWrapper(torch.nn.Module):
+    """Wrapper that sorts atoms by group index before evaluation.
+
+    - Takes a PETMLIPWrapper instance and a groups_mapping tensor at init.
+    - In forward: derives an atoms-wise mapping from central species, builds a
+      permutation via argsort, permutes the batch (through batch_dict),
+      evaluates the inner PETMLIPWrapper, and inverse-permutes forces back.
+    """
+
+    def __init__(self, model, groups_mapping):
+        super(PETMLIPBatchSortWrapper, self).__init__()
+        self.model = model  # expected to be PETMLIPWrapper
+        if not isinstance(groups_mapping, torch.Tensor):
+            raise ValueError("groups_mapping must be a 1D torch.LongTensor")
+        if groups_mapping.dim() != 1:
+            raise ValueError("groups_mapping must be 1D")
+        if groups_mapping.dtype != torch.long:
+            groups_mapping = groups_mapping.to(torch.long)
+        self.register_buffer('groups_mapping', groups_mapping.contiguous())
+
+    def forward(self, batch, augmentation, create_graph):
+        # Build dict from batch
+        batch_dict = batch_to_dict(batch)
+
+        # Derive per-atom group indices and a permutation
+        central_species = batch_dict["central_species"]
+        atoms_mapping = self.groups_mapping[central_species]
+        perm = torch.argsort(atoms_mapping)
+        inv_perm = torch.empty_like(perm)
+        inv_perm[perm] = torch.arange(perm.numel(), device=perm.device)
+
+        # Permute batch_dict using the shared utility
+        permuted_dict = permute_batch_dict(batch_dict, perm)
+
+        # Compute chunk bounds [start, end) for contiguous groups and group ids
+        sorted_groups = atoms_mapping.index_select(0, perm)
+        group_ids, counts = torch.unique_consecutive(
+            sorted_groups, return_counts=True
+        )
+        ends = torch.cumsum(counts, dim=0)
+        starts = ends - counts
+        group_chunk_bounds = torch.stack([starts, ends], dim=1)
+
+        # Convert back to a Data object expected by PETMLIPWrapper
+        permuted_batch = Data(
+            x=permuted_dict["x"],
+            central_species=permuted_dict["central_species"],
+            neighbor_species=permuted_dict["neighbor_species"],
+            mask=permuted_dict["mask"],
+            batch=permuted_dict["batch"],
+            nums=permuted_dict["nums"],
+            neighbors_index=permuted_dict["neighbors_index"].transpose(0, 1),
+            neighbors_pos=permuted_dict["neighbors_pos"],
+            group_chunk_bounds=group_chunk_bounds,
+            group_ids=group_ids,
+        )
+
+        energies, forces = self.model(
+            permuted_batch, augmentation=augmentation, create_graph=create_graph
+        )
+
+        # Inverse-permute forces back to original atom order
+        if forces is not None:
+            forces = forces.index_select(0, inv_perm)
+
+        return [energies, forces]

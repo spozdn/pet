@@ -302,6 +302,12 @@ def batch_to_dict(batch):
     if hasattr(batch, "volume"):
         batch_dict["volume"] = batch.volume
 
+    if hasattr(batch, "group_chunk_bounds"):
+        batch_dict["group_chunk_bounds"] = batch.group_chunk_bounds
+
+    if hasattr(batch, "group_ids"):
+        batch_dict["group_ids"] = batch.group_ids
+
     return batch_dict
 
 
